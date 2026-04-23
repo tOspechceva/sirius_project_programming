@@ -1,233 +1,154 @@
-# Платформа онлайн-курсов
+# LAB2 - Spring Data JPA + PostgreSQL
 
-REST API на Spring Boot для учета прохождения уроков и расчета прогресса учеников.
+Проект переведен с in-memory хранения на полноценную работу с PostgreSQL через Spring Data JPA.
 
-## Постановка задачи
+## Что изменено в LAB2
 
-Реализована система с тремя основными сущностями:
+- Добавлен `spring-boot-starter-data-jpa` и драйвер `postgresql`.
+- Реализованы JPA-сущности:
+  - `UserEntity` -> таблица `users`
+  - `LessonEntity` -> таблица `lessons`
+  - `LessonProgressEntity` -> таблица `lesson_progress`
+- Добавлены Spring Data репозитории:
+  - `SpringDataUserEntityRepository`
+  - `SpringDataLessonEntityRepository`
+  - `SpringDataLessonProgressEntityRepository`
+- Добавлены JPA-адаптеры, реализующие старые интерфейсы репозиториев:
+  - `JpaUserRepositoryAdapter`
+  - `JpaLessonRepositoryAdapter`
+  - `JpaLessonProgressRepositoryAdapter`
+- Конфигурация приложения обновлена на работу с PostgreSQL.
+- Добавлен `docker-compose.yml` для разворачивания PostgreSQL.
+- Добавлен `data.sql` с тестовыми данными.
+- README обновлен под LAB2.
 
-- `User`: логин, email, дата регистрации.
-- `Lesson`: ID, тема, длительность видео, тест.
-- `LessonProgress`: связь пользователя и урока, дата завершения, результат теста.
+## Стек
 
-Дополнительно реализован расчет:
+- Java 25
+- Spring Boot 3.5
+- Spring Data JPA
+- PostgreSQL 16
+- Docker Compose
 
-- прогресса одного ученика в процентах;
-- прогресса всех учеников в процентах.
+## Структура данных
 
-## Архитектура проекта
+### Таблица `users`
 
-Проект разделен на слои:
+- `id` (PK)
+- `login` (unique)
+- `email` (unique)
+- `registration_date`
 
-- `model` — доменные сущности.
-- `repository` — интерфейсы доступа к данным.
-- `repository.inmemory` — реализации на `static`-коллекциях Java.
-- `service` — бизнес-логика и расчет прогресса.
-- `api` — REST-контроллеры, DTO и обработчик ошибок.
-- `config` — конфигурация бинов приложения.
+### Таблица `lessons`
 
-## Связи между сущностями
+- `id` (PK)
+- `topic`
+- `video_duration_minutes`
+- `test_name`
+- `max_test_score`
 
-- `User` и `Lesson` связаны отношением многие-ко-многим.
-- Технически связь реализована через `LessonProgress`.
-- Для одной пары `userId + lessonId` хранится одна запись прогресса.
+### Таблица `lesson_progress`
 
-## Хранение данных
+- `id` (PK)
+- `user_id` (FK -> users.id)
+- `lesson_id` (FK -> lessons.id)
+- `completion_date`
+- `test_result`
+- уникальная пара (`user_id`, `lesson_id`)
 
-По условию задания используется in-memory хранение через `static`-коллекции:
+## Запуск PostgreSQL
 
-- `StaticUserRepository`
-- `StaticLessonRepository`
-- `StaticLessonProgressRepository`
+Из корня проекта:
 
-Важно: данные не сохраняются между перезапусками приложения.
-
-## Гибкость реализации
-
-Формула расчета прогресса вынесена в отдельную стратегию:
-
-- `ProgressCalculator` — общий контракт;
-- `CompletionProgressCalculator` — текущая формула (процент завершенных уроков).
-
-Это позволяет без изменения сервиса добавить другую логику расчета (например, по среднему баллу тестов или с весами уроков).
-
-## API
-
-Базовый адрес: `http://localhost:8081`
-
-### Users (полный CRUD)
-
-- `POST /api/users` — создать пользователя
-- `GET /api/users` — получить список пользователей
-- `GET /api/users/{id}` — получить пользователя по ID
-- `PUT /api/users/{id}` — обновить пользователя
-- `DELETE /api/users/{id}` — удалить пользователя
-
-### Lessons (полный CRUD)
-
-- `POST /api/lessons` — создать урок
-- `GET /api/lessons` — получить список уроков
-- `GET /api/lessons/{id}` — получить урок по ID
-- `PUT /api/lessons/{id}` — обновить урок
-- `DELETE /api/lessons/{id}` — удалить урок
-
-### Progress (нужные операции)
-
-- `POST /api/progress` — создать/перезаписать запись прогресса
-- `POST /api/progress/complete` — отметить завершение (совместимый endpoint)
-- `GET /api/progress` — получить все записи прогресса
-- `GET /api/progress/users/{userId}/lessons` — получить прогресс пользователя по всем урокам
-- `GET /api/progress/users/{userId}/lessons/{lessonId}` — получить запись прогресса по уроку
-- `PUT /api/progress/users/{userId}/lessons/{lessonId}` — обновить запись прогресса
-- `DELETE /api/progress/users/{userId}/lessons/{lessonId}` — удалить запись прогресса
-- `GET /api/progress/users/{userId}` — получить прогресс пользователя в %
-- `GET /api/progress/users` — получить прогресс всех пользователей в %
-
-## Postman: сценарий тестирования
-
-Рекомендуемый порядок проверки:
-
-1. Создать двух пользователей.
-2. Создать 2-3 урока.
-3. Отметить прохождение уроков.
-4. Проверить прогресс одного ученика.
-5. Проверить прогресс всех учеников.
-
-### 1. Создание пользователя
-
-`POST http://localhost:8081/api/users`
-
-```json
-{
-  "login": "ivan_student",
-  "email": "ivan@example.com",
-  "registrationDate": "2026-03-03"
-}
+```bash
+docker compose up -d
 ```
 
-### 2. Создание второго пользователя
+Параметры БД:
 
-`POST http://localhost:8081/api/users`
+- DB: `hl_module1`
+- User: `postgres`
+- Password: `postgres`
+- Port: `5432`
 
-```json
-{
-  "login": "olga_student",
-  "email": "olga@example.com",
-  "registrationDate": "2026-03-10"
-}
-```
+## Конфигурация приложения
 
-### 3. Создание урока
+`src/main/resources/application.properties`:
 
-`POST http://localhost:8081/api/lessons`
+- `server.port=8081`
+- `spring.datasource.url=jdbc:postgresql://localhost:5432/hl_module1`
+- `spring.datasource.username=postgres`
+- `spring.datasource.password=postgres`
+- `spring.jpa.hibernate.ddl-auto=create-drop`
+- `spring.sql.init.mode=always`
 
-```json
-{
-  "topic": "Java Basics",
-  "videoDurationMinutes": 45,
-  "testName": "Тест по синтаксису",
-  "maxTestScore": 10
-}
-```
+На старте Hibernate создает таблицы, затем `data.sql` загружает тестовые записи.
 
-### 4. Создание второго урока
+## Тестовые данные (автозагрузка)
 
-`POST http://localhost:8081/api/lessons`
+Файл: `src/main/resources/data.sql`
 
-```json
-{
-  "topic": "ООП в Java",
-  "videoDurationMinutes": 55,
-  "testName": "Тест по ООП",
-  "maxTestScore": 20
-}
-```
+Загружается:
 
-### 5. Отметка завершения урока
+- 2 пользователя
+- 3 урока
+- 4 записи прогресса
 
-`POST http://localhost:8081/api/progress/complete`
+После вставки обновляются sequence для корректной генерации новых ID.
 
-```json
-{
-  "userId": 1,
-  "lessonId": 1,
-  "completionDate": "2026-04-01",
-  "testResult": 9
-}
-```
+## REST API (актуально для LAB2)
 
-### 6. Прогресс одного ученика
+Базовый URL: `http://localhost:8081`
 
-`GET http://localhost:8081/api/progress/users/1`
+### Users
 
-### 7. Прогресс всех учеников
+- `POST /api/users`
+- `GET /api/users`
+- `GET /api/users/{id}`
+- `PUT /api/users/{id}`
+- `DELETE /api/users/{id}`
 
-`GET http://localhost:8081/api/progress/users`
+### Lessons
 
-### 8. Обновление пользователя (пример PUT)
+- `POST /api/lessons`
+- `GET /api/lessons`
+- `GET /api/lessons/{id}`
+- `PUT /api/lessons/{id}`
+- `DELETE /api/lessons/{id}`
 
-`PUT http://localhost:8081/api/users/1`
+### Progress
 
-```json
-{
-  "login": "ivan_student_updated",
-  "email": "ivan.new@example.com",
-  "registrationDate": "2026-03-03"
-}
-```
+- `POST /api/progress`
+- `POST /api/progress/complete`
+- `GET /api/progress`
+- `GET /api/progress/users/{userId}/lessons`
+- `GET /api/progress/users/{userId}/lessons/{lessonId}`
+- `PUT /api/progress/users/{userId}/lessons/{lessonId}`
+- `DELETE /api/progress/users/{userId}/lessons/{lessonId}`
+- `GET /api/progress/users/{userId}`
+- `GET /api/progress/users`
 
-### 9. Обновление урока (пример PUT)
+## Запуск через IntelliJ IDEA
 
-`PUT http://localhost:8081/api/lessons/1`
+1. Поднять PostgreSQL:
+   - `docker compose up -d`
+2. Открыть проект в IntelliJ.
+3. Дождаться импорта Gradle.
+4. Убедиться, что выбран JDK 25.
+5. Запустить `Module1Application`.
+6. Проверить API на `http://localhost:8081`.
 
-```json
-{
-  "topic": "Java Basics Updated",
-  "videoDurationMinutes": 50,
-  "testName": "Тест по синтаксису v2",
-  "maxTestScore": 12
-}
-```
+## Пример быстрой проверки
 
-### 10. Обновление записи прогресса (пример PUT)
+1. `GET /api/users` -> должны вернуться 2 пользователя из `data.sql`.
+2. `GET /api/lessons` -> должны вернуться 3 урока.
+3. `GET /api/progress/users` -> должны вернуться проценты прогресса.
 
-`PUT http://localhost:8081/api/progress/users/1/lessons/1`
+## Примечание по архитектуре
 
-```json
-{
-  "completionDate": "2026-04-02",
-  "testResult": 10
-}
-```
+Контроллеры и сервисный слой сохранены. Замена коснулась только слоя хранения:
 
-### 11. Удаление записи прогресса (пример DELETE)
+- раньше: static in-memory коллекции;
+- теперь: Spring Data JPA + PostgreSQL.
 
-`DELETE http://localhost:8081/api/progress/users/1/lessons/1`
-
-## Запуск в IntelliJ IDEA
-
-1. Открыть проект `c:\ad\hl-module1`.
-2. Дождаться импорта Gradle.
-3. Проверить JDK: `File -> Project Structure -> Project SDK` (рекомендуется JDK 25).
-4. Открыть класс `Module1Application`.
-5. Запустить `main` метод (`Run 'Module1Application'`).
-6. Убедиться, что приложение стартовало на `http://localhost:8081`.
-
-## Бизнес-валидация
-
-При вызове `POST /api/progress/complete` проверяется:
-
-- пользователь существует;
-- урок существует;
-- дата завершения задана;
-- дата завершения не раньше даты регистрации пользователя;
-- результат теста в диапазоне `0..maxScore`.
-
-При нарушении правила возвращается `400 Bad Request` с сообщением об ошибке.
-
-## Как можно расширить проект
-
-- Добавить пагинацию и сортировку в `GET` списки.
-- Добавить валидацию DTO через `jakarta.validation` (`@NotBlank`, `@Email`, `@Min`).
-- Реализовать альтернативные формулы в `ProgressCalculator`.
-- Заменить in-memory слой на БД без изменения бизнес-сервиса.
+Это позволяет менять реализацию репозиториев без переписывания бизнес-логики.

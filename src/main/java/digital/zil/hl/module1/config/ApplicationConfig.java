@@ -3,9 +3,6 @@ package digital.zil.hl.module1.config;
 import digital.zil.hl.module1.repository.LessonProgressRepository;
 import digital.zil.hl.module1.repository.LessonRepository;
 import digital.zil.hl.module1.repository.UserRepository;
-import digital.zil.hl.module1.repository.inmemory.StaticLessonProgressRepository;
-import digital.zil.hl.module1.repository.inmemory.StaticLessonRepository;
-import digital.zil.hl.module1.repository.inmemory.StaticUserRepository;
 import digital.zil.hl.module1.service.CompletionProgressCalculator;
 import digital.zil.hl.module1.service.CourseProgressService;
 import digital.zil.hl.module1.service.ProgressCalculator;
@@ -15,26 +12,11 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Явно объявляем бины приложения.
  *
- * <p>Хранилище реализовано через static-коллекции в in-memory репозиториях,
- * как и требуется в задании.
+ * <p>Конкретные реализации репозиториев предоставляются Spring Data JPA
+ * адаптерами из пакета repository.jpa.
  */
 @Configuration
 public class ApplicationConfig {
-
-    @Bean
-    public UserRepository userRepository() {
-        return new StaticUserRepository();
-    }
-
-    @Bean
-    public LessonRepository lessonRepository() {
-        return new StaticLessonRepository();
-    }
-
-    @Bean
-    public LessonProgressRepository lessonProgressRepository() {
-        return new StaticLessonProgressRepository();
-    }
 
     @Bean
     public ProgressCalculator progressCalculator() {
