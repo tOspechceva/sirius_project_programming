@@ -23,7 +23,11 @@ const points = files
         const vus = Number(file.match(/^summary-vus-(\d+)\.json$/)[1]);
         const raw = fs.readFileSync(path.join(resultsDir, file), "utf8");
         const json = JSON.parse(raw);
-        const avgMs = json?.metrics?.http_req_duration?.values?.avg;
+        const durationMetric = json?.metrics?.http_req_duration;
+        // Совместимость с разными форматами k6 summary:
+        // - metrics.http_req_duration.avg
+        // - metrics.http_req_duration.values.avg
+        const avgMs = durationMetric?.avg ?? durationMetric?.values?.avg;
         if (typeof avgMs !== "number") {
             throw new Error(`http_req_duration avg not found in ${file}`);
         }
