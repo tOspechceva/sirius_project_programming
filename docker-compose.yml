@@ -33,5 +33,18 @@ services:
     ports:
       - "8082:8081"
 
+  k6:
+    image: grafana/k6:0.52.0
+    container_name: hl-module1-k6
+    profiles: ["perf"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      app:
+        condition: service_started
+    working_dir: /scripts
+    volumes:
+      - ./k6:/scripts
+
 volumes:
   postgres_data:

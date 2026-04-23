@@ -1,125 +1,110 @@
-# LAB3 - Containerization + Flyway Migrations
+# LAB4 - Performance Testing with K6
 
-В этой лабораторной проект упакован в Docker-контейнер, схема БД перенесена в Flyway-миграции, и весь стенд (`app + db`) поднимается одной командой через Docker Compose.
+В LAB4 добавлено нагрузочное тестирование с K6 для API приложения.
 
-## Что изменили по сравнению с LAB2
+## Что добавлено и изменено относительно LAB3
 
-- Добавили `Dockerfile` для контейнеризации Spring Boot приложения.
-- Расширили `docker-compose.yml`: теперь поднимается не только PostgreSQL, но и само приложение.
-- Перешли с `data.sql`/`ddl-auto=create-drop` на Flyway-миграции:
-  - DDL в `src/main/resources/db/migration/V1__init_schema.sql`
-  - DML в `src/main/resources/db/migration/V2__seed_data.sql`
-- Удалили `src/main/resources/data.sql`.
-- Изменили настройки JPA:
-  - `spring.jpa.hibernate.ddl-auto=validate`
-  - `spring.sql.init.mode=never`
-- Добавили зависимость `org.flywaydb:flyway-core` в `build.gradle`.
+- Развернут K6 в `docker-compose` как отдельный сервис (`profile: perf`).
+- Добавлен K6 профиль и тестовый скрипт:
+  - `k6/profile.js`
+  - `k6/load-test.js`
+- Реализована смешанная нагрузка `POST + GET` в пропорции 50/50 (настраиваемо).
+- Использован executor `ramping-vus` и стандартный пакет `k6/http`.
+- Добавлен сценарий теста удвоения нагрузки (4-5 точек):
+  - `k6/run-doubling.ps1`
+- Добавлен JS-генератор графика и артефактов:
+  - `k6/generate-chart.js`
+  - генерирует:
+    - `k6/results/avg-response-vs-vus.csv`
+    - `k6/results/avg-response-vs-vus.md`
+    - `k6/results/avg-response-vs-vus.html`
 
-## Стек
+## Целевые endpoint-ы для нагрузки
 
-- Java 25
-- Spring Boot 3.5
-- Spring Data JPA
-- Flyway
-- PostgreSQL 16
-- Docker / Docker Compose
+- `POST /api/users` - создание простой сущности (пользователь).
+- `GET /api/progress/users` - дополнительный endpoint со статистикой прогресса.
 
-## Структура миграций
+## Профиль нагрузки K6
 
-Папка миграций:
+Файл: `k6/profile.js`
 
-- `src/main/resources/db/migration/V1__init_schema.sql` - создание таблиц.
-- `src/main/resources/db/migration/V2__seed_data.sql` - начальные данные и фиксация sequence.
+Параметры настраиваются через переменные окружения:
 
-### Таблицы
+- `BASE_URL` (default: `http://localhost:8082`)
+- `POST_RATIO` (default: `0.5`)
+- `TARGET_VUS` (default: `10`)
+- `START_VUS` (default: `1`)
+- `RAMP_UP` (default: `20s`)
+- `STEADY_DURATION` (default: `40s`)
+- `RAMP_DOWN` (default: `15s`)
+- `SLEEP_SECONDS` (default: `0.2`)
 
-- `users`:
-  - `id` PK
-  - `login` UNIQUE
-  - `email` UNIQUE
-  - `registration_date`
-- `lessons`:
-  - `id` PK
-  - `topic`
-  - `video_duration_minutes`
-  - `test_name`
-  - `max_test_score`
-- `lesson_progress`:
-  - `id` PK
-  - `user_id` FK -> `users.id`
-  - `lesson_id` FK -> `lessons.id`
-  - `completion_date`
-  - `test_result`
-  - уникальная пара (`user_id`, `lesson_id`)
-
-## Запуск стенда через Docker Compose
-
-Из корня проекта:
+## Как развернуть стенд (app + db)
 
 ```bash
 docker compose up -d --build
 ```
 
-Поднимутся два контейнера:
+Порты:
 
-- `hl-module1-postgres`
-- `hl-module1-app`
+- API: `http://localhost:8082`
+- PostgreSQL: `5432`
 
-Проверка:
+## Как запустить K6 вручную
 
-```bash
-docker ps
-```
-
-Ожидаемо:
-
-- PostgreSQL слушает `5432`
-- Приложение доступно с хоста на `8082`
-
-## Переменные окружения приложения в compose
-
-Сервис `app` получает:
-
-- `DB_URL=jdbc:postgresql://postgres:5432/hl_module1`
-- `DB_USERNAME=postgres`
-- `DB_PASSWORD=postgres`
-
-## Проверка после старта (демонстрация преподавателю)
-
-1. Поднять стенд:
-   - `docker compose up -d --build`
-2. Показать контейнеры:
-   - `docker ps`
-3. Показать логи приложения:
-   - `docker logs hl-module1-app`
-   - в логах должно быть `Started Module1Application`
-4. Проверить API:
-   - `GET http://localhost:8082/api/users`
-   - `GET http://localhost:8082/api/lessons`
-   - `GET http://localhost:8082/api/progress/users`
-
-Если ответы приходят, значит стенд развернут корректно: миграции применились, БД и приложение связаны, API доступно.
-
-## Локальный запуск без Docker (опционально)
-
-Можно запускать приложение из IDE, если PostgreSQL уже доступен на `localhost:5432` с параметрами:
-
-- DB: `hl_module1`
-- user: `postgres`
-- password: `postgres`
-
-Файл `application.properties` уже настроен с дефолтами и поддержкой env-переменных.
-
-## Команды остановки/очистки
-
-Остановить стенд:
+Пример запуска для 20 VUs:
 
 ```bash
-docker compose down
+docker compose run --rm k6 run /scripts/load-test.js \
+  -e BASE_URL=http://app:8081 \
+  -e TARGET_VUS=20 \
+  -e POST_RATIO=0.5 \
+  -e RAMP_UP=20s \
+  -e STEADY_DURATION=40s \
+  -e RAMP_DOWN=15s \
+  --summary-export /scripts/results/summary-vus-20.json
 ```
 
-Остановить и удалить volume БД:
+## Тест удвоения нагрузки (4-5 точек)
+
+Готовый скрипт для Windows PowerShell:
+
+```powershell
+.\k6\run-doubling.ps1
+```
+
+Скрипт выполняет тесты по VUs:
+
+- 10
+- 20
+- 40
+- 80
+- 160
+
+## Построение графика зависимости avg response от VUs
+
+После тестов запустить:
 
 ```bash
-docker compose down -v
+node k6/generate-chart.js
 ```
+
+Результаты:
+
+- CSV: `k6/results/avg-response-vs-vus.csv`
+- Markdown-таблица: `k6/results/avg-response-vs-vus.md`
+- HTML-график: `k6/results/avg-response-vs-vus.html`
+
+## Что показать преподавателю
+
+1. Поднятый compose-стенд (`docker ps`):
+   - `hl-module1-postgres`
+   - `hl-module1-app`
+2. Запуск k6 теста (или `run-doubling.ps1`).
+3. Файлы результатов в `k6/results`.
+4. График `avg response vs vus` из `avg-response-vs-vus.html`.
+
+## Примечание
+
+Для стабильности в контейнерном режиме API опубликовано на `8082`,
+внутри docker-сети приложение доступно как `http://app:8081`.
