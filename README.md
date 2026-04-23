@@ -1,154 +1,125 @@
-# LAB2 - Spring Data JPA + PostgreSQL
+# LAB3 - Containerization + Flyway Migrations
 
-Проект переведен с in-memory хранения на полноценную работу с PostgreSQL через Spring Data JPA.
+В этой лабораторной проект упакован в Docker-контейнер, схема БД перенесена в Flyway-миграции, и весь стенд (`app + db`) поднимается одной командой через Docker Compose.
 
-## Что изменено в LAB2
+## Что изменили по сравнению с LAB2
 
-- Добавлен `spring-boot-starter-data-jpa` и драйвер `postgresql`.
-- Реализованы JPA-сущности:
-  - `UserEntity` -> таблица `users`
-  - `LessonEntity` -> таблица `lessons`
-  - `LessonProgressEntity` -> таблица `lesson_progress`
-- Добавлены Spring Data репозитории:
-  - `SpringDataUserEntityRepository`
-  - `SpringDataLessonEntityRepository`
-  - `SpringDataLessonProgressEntityRepository`
-- Добавлены JPA-адаптеры, реализующие старые интерфейсы репозиториев:
-  - `JpaUserRepositoryAdapter`
-  - `JpaLessonRepositoryAdapter`
-  - `JpaLessonProgressRepositoryAdapter`
-- Конфигурация приложения обновлена на работу с PostgreSQL.
-- Добавлен `docker-compose.yml` для разворачивания PostgreSQL.
-- Добавлен `data.sql` с тестовыми данными.
-- README обновлен под LAB2.
+- Добавили `Dockerfile` для контейнеризации Spring Boot приложения.
+- Расширили `docker-compose.yml`: теперь поднимается не только PostgreSQL, но и само приложение.
+- Перешли с `data.sql`/`ddl-auto=create-drop` на Flyway-миграции:
+  - DDL в `src/main/resources/db/migration/V1__init_schema.sql`
+  - DML в `src/main/resources/db/migration/V2__seed_data.sql`
+- Удалили `src/main/resources/data.sql`.
+- Изменили настройки JPA:
+  - `spring.jpa.hibernate.ddl-auto=validate`
+  - `spring.sql.init.mode=never`
+- Добавили зависимость `org.flywaydb:flyway-core` в `build.gradle`.
 
 ## Стек
 
 - Java 25
 - Spring Boot 3.5
 - Spring Data JPA
+- Flyway
 - PostgreSQL 16
-- Docker Compose
+- Docker / Docker Compose
 
-## Структура данных
+## Структура миграций
 
-### Таблица `users`
+Папка миграций:
 
-- `id` (PK)
-- `login` (unique)
-- `email` (unique)
-- `registration_date`
+- `src/main/resources/db/migration/V1__init_schema.sql` - создание таблиц.
+- `src/main/resources/db/migration/V2__seed_data.sql` - начальные данные и фиксация sequence.
 
-### Таблица `lessons`
+### Таблицы
 
-- `id` (PK)
-- `topic`
-- `video_duration_minutes`
-- `test_name`
-- `max_test_score`
+- `users`:
+  - `id` PK
+  - `login` UNIQUE
+  - `email` UNIQUE
+  - `registration_date`
+- `lessons`:
+  - `id` PK
+  - `topic`
+  - `video_duration_minutes`
+  - `test_name`
+  - `max_test_score`
+- `lesson_progress`:
+  - `id` PK
+  - `user_id` FK -> `users.id`
+  - `lesson_id` FK -> `lessons.id`
+  - `completion_date`
+  - `test_result`
+  - уникальная пара (`user_id`, `lesson_id`)
 
-### Таблица `lesson_progress`
-
-- `id` (PK)
-- `user_id` (FK -> users.id)
-- `lesson_id` (FK -> lessons.id)
-- `completion_date`
-- `test_result`
-- уникальная пара (`user_id`, `lesson_id`)
-
-## Запуск PostgreSQL
+## Запуск стенда через Docker Compose
 
 Из корня проекта:
 
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
-Параметры БД:
+Поднимутся два контейнера:
+
+- `hl-module1-postgres`
+- `hl-module1-app`
+
+Проверка:
+
+```bash
+docker ps
+```
+
+Ожидаемо:
+
+- PostgreSQL слушает `5432`
+- Приложение доступно с хоста на `8082`
+
+## Переменные окружения приложения в compose
+
+Сервис `app` получает:
+
+- `DB_URL=jdbc:postgresql://postgres:5432/hl_module1`
+- `DB_USERNAME=postgres`
+- `DB_PASSWORD=postgres`
+
+## Проверка после старта (демонстрация преподавателю)
+
+1. Поднять стенд:
+   - `docker compose up -d --build`
+2. Показать контейнеры:
+   - `docker ps`
+3. Показать логи приложения:
+   - `docker logs hl-module1-app`
+   - в логах должно быть `Started Module1Application`
+4. Проверить API:
+   - `GET http://localhost:8082/api/users`
+   - `GET http://localhost:8082/api/lessons`
+   - `GET http://localhost:8082/api/progress/users`
+
+Если ответы приходят, значит стенд развернут корректно: миграции применились, БД и приложение связаны, API доступно.
+
+## Локальный запуск без Docker (опционально)
+
+Можно запускать приложение из IDE, если PostgreSQL уже доступен на `localhost:5432` с параметрами:
 
 - DB: `hl_module1`
-- User: `postgres`
-- Password: `postgres`
-- Port: `5432`
+- user: `postgres`
+- password: `postgres`
 
-## Конфигурация приложения
+Файл `application.properties` уже настроен с дефолтами и поддержкой env-переменных.
 
-`src/main/resources/application.properties`:
+## Команды остановки/очистки
 
-- `server.port=8081`
-- `spring.datasource.url=jdbc:postgresql://localhost:5432/hl_module1`
-- `spring.datasource.username=postgres`
-- `spring.datasource.password=postgres`
-- `spring.jpa.hibernate.ddl-auto=create-drop`
-- `spring.sql.init.mode=always`
+Остановить стенд:
 
-На старте Hibernate создает таблицы, затем `data.sql` загружает тестовые записи.
+```bash
+docker compose down
+```
 
-## Тестовые данные (автозагрузка)
+Остановить и удалить volume БД:
 
-Файл: `src/main/resources/data.sql`
-
-Загружается:
-
-- 2 пользователя
-- 3 урока
-- 4 записи прогресса
-
-После вставки обновляются sequence для корректной генерации новых ID.
-
-## REST API (актуально для LAB2)
-
-Базовый URL: `http://localhost:8081`
-
-### Users
-
-- `POST /api/users`
-- `GET /api/users`
-- `GET /api/users/{id}`
-- `PUT /api/users/{id}`
-- `DELETE /api/users/{id}`
-
-### Lessons
-
-- `POST /api/lessons`
-- `GET /api/lessons`
-- `GET /api/lessons/{id}`
-- `PUT /api/lessons/{id}`
-- `DELETE /api/lessons/{id}`
-
-### Progress
-
-- `POST /api/progress`
-- `POST /api/progress/complete`
-- `GET /api/progress`
-- `GET /api/progress/users/{userId}/lessons`
-- `GET /api/progress/users/{userId}/lessons/{lessonId}`
-- `PUT /api/progress/users/{userId}/lessons/{lessonId}`
-- `DELETE /api/progress/users/{userId}/lessons/{lessonId}`
-- `GET /api/progress/users/{userId}`
-- `GET /api/progress/users`
-
-## Запуск через IntelliJ IDEA
-
-1. Поднять PostgreSQL:
-   - `docker compose up -d`
-2. Открыть проект в IntelliJ.
-3. Дождаться импорта Gradle.
-4. Убедиться, что выбран JDK 25.
-5. Запустить `Module1Application`.
-6. Проверить API на `http://localhost:8081`.
-
-## Пример быстрой проверки
-
-1. `GET /api/users` -> должны вернуться 2 пользователя из `data.sql`.
-2. `GET /api/lessons` -> должны вернуться 3 урока.
-3. `GET /api/progress/users` -> должны вернуться проценты прогресса.
-
-## Примечание по архитектуре
-
-Контроллеры и сервисный слой сохранены. Замена коснулась только слоя хранения:
-
-- раньше: static in-memory коллекции;
-- теперь: Spring Data JPA + PostgreSQL.
-
-Это позволяет менять реализацию репозиториев без переписывания бизнес-логики.
+```bash
+docker compose down -v
+```

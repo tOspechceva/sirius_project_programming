@@ -5,9 +5,9 @@ VALUES
 
 INSERT INTO lessons (id, topic, video_duration_minutes, test_name, max_test_score)
 VALUES
-    (1, 'Java Basics', 45, 'Тест по синтаксису', 10),
-    (2, 'OOP in Java', 55, 'Тест по ООП', 20),
-    (3, 'Spring Intro', 60, 'Тест по Spring', 25);
+    (1, 'Java Basics', 45, 'Test po sintaksisu', 10),
+    (2, 'OOP in Java', 55, 'Test po OOP', 20),
+    (3, 'Spring Intro', 60, 'Test po Spring', 25);
 
 INSERT INTO lesson_progress (id, user_id, lesson_id, completion_date, test_result)
 VALUES
