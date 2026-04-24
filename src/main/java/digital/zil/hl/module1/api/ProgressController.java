@@ -113,6 +113,12 @@ public class ProgressController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/clear")
+    public ResponseEntity<Void> clearProgress() {
+        courseProgressService.deleteAllProgress();
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/users/{userId}")
     public UserProgressResponse getUserProgress(@PathVariable final long userId) {
         final User user = userRepository.findById(userId)

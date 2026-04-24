@@ -88,6 +88,13 @@ public class UserController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/clear")
+    public ResponseEntity<Void> clearUsers() {
+        userRepository.findAll().forEach(user -> courseProgressService.deleteAllProgressForUser(user.getId()));
+        userRepository.deleteAll();
+        return ResponseEntity.noContent().build();
+    }
+
     private static User toDomain(final UserEntity entity) {
         return new User(entity.getId(), entity.getLogin(), entity.getEmail(), entity.getRegistrationDate());
     }

@@ -144,6 +144,15 @@ public final class CourseProgressService {
     }
 
     /**
+     * Удаляет весь прогресс в системе.
+     */
+    public int deleteAllProgress() {
+        final int total = lessonProgressRepository.findAll().size();
+        lessonProgressRepository.deleteAll();
+        return total;
+    }
+
+    /**
      * Рассчитывает прогресс одного пользователя в процентах.
      *
      * <p>Формула делегируется объекту {@link ProgressCalculator},

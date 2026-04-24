@@ -91,6 +91,13 @@ public class LessonController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/clear")
+    public ResponseEntity<Void> clearLessons() {
+        lessonRepository.findAll().forEach(lesson -> courseProgressService.deleteAllProgressForLesson(lesson.getId()));
+        lessonRepository.deleteAll();
+        return ResponseEntity.noContent().build();
+    }
+
     private static Lesson toDomain(final LessonEntity entity) {
         return new Lesson(
                 entity.getId(),
