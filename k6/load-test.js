@@ -12,11 +12,18 @@ const getReqCount = new Counter("get_req_count");
 
 export const options = {
     scenarios: {
-        mixed_api_load: {
+        post_pool: {
             executor: "ramping-vus",
-            exec: "mixedFlow",
-            startVUs: profile.startVus,
-            stages: profile.stages,
+            exec: "postFlow",
+            startVUs: profile.postStartVus,
+            stages: profile.stagesFor(profile.postTargetVus),
+            gracefulRampDown: "5s"
+        },
+        get_pool: {
+            executor: "ramping-vus",
+            exec: "getFlow",
+            startVUs: profile.getStartVus,
+            stages: profile.stagesFor(profile.getTargetVus),
             gracefulRampDown: "5s"
         }
     },
@@ -35,35 +42,35 @@ function buildUniqueUserPayload() {
     });
 }
 
-export function mixedFlow() {
-    const shouldPost = Math.random() < profile.postRatio;
+export function postFlow() {
+    const response = http.post(
+        `${profile.baseUrl}/api/users`,
+        buildUniqueUserPayload(),
+        {
+            headers: { "Content-Type": "application/json" },
+            tags: { endpoint: "users_create", method: "POST", pool: "post" }
+        }
+    );
 
-    if (shouldPost) {
-        const response = http.post(
-            `${profile.baseUrl}/api/users`,
-            buildUniqueUserPayload(),
-            {
-                headers: { "Content-Type": "application/json" },
-                tags: { endpoint: "users_create", method: "POST" }
-            }
-        );
+    postReqCount.add(1);
+    postReqDuration.add(response.timings.duration);
+    check(response, {
+        "POST /api/users status is 201": (r) => r.status === 201
+    });
 
-        postReqCount.add(1);
-        postReqDuration.add(response.timings.duration);
-        check(response, {
-            "POST /api/users status is 201": (r) => r.status === 201
-        });
-    } else {
-        const response = http.get(`${profile.baseUrl}/api/progress/users`, {
-            tags: { endpoint: "progress_stats", method: "GET" }
+    sleep(Number(__ENV.SLEEP_SECONDS || 0.2));
+}
+
+export function getFlow() {
+    const response = http.get(`${profile.baseUrl}/api/progress/users`, {
+            tags: { endpoint: "progress_stats", method: "GET", pool: "get" }
         });
 
-        getReqCount.add(1);
-        getReqDuration.add(response.timings.duration);
-        check(response, {
-            "GET /api/progress/users status is 200": (r) => r.status === 200
-        });
-    }
+    getReqCount.add(1);
+    getReqDuration.add(response.timings.duration);
+    check(response, {
+        "GET /api/progress/users status is 200": (r) => r.status === 200
+    });
 
     sleep(Number(__ENV.SLEEP_SECONDS || 0.2));
 }

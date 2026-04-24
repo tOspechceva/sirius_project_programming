@@ -1,6 +1,8 @@
 package digital.zil.hl.module1.service;
 
-import digital.zil.hl.module1.model.Lesson;
+import digital.zil.hl.module1.entity.LessonEntity;
+import digital.zil.hl.module1.entity.LessonProgressEntity;
+import digital.zil.hl.module1.entity.UserEntity;
 import digital.zil.hl.module1.model.LessonProgress;
 import digital.zil.hl.module1.model.User;
 import digital.zil.hl.module1.repository.LessonProgressRepository;
@@ -69,20 +71,30 @@ public final class CourseProgressService {
             final LocalDate completionDate,
             final int testResult
     ) {
-        final User user = userRepository.findById(userId)
+        final UserEntity user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + userId));
-        final Lesson lesson = lessonRepository.findById(lessonId)
+        final LessonEntity lesson = lessonRepository.findById(lessonId)
                 .orElseThrow(() -> new IllegalArgumentException("Урок не найден: " + lessonId));
 
         validateCompletionData(user, lesson, completionDate, testResult);
-        return lessonProgressRepository.completeLesson(userId, lessonId, completionDate, testResult);
+        final LessonProgressEntity progressEntity = lessonProgressRepository.findByUserIdAndLessonId(userId, lessonId)
+                .orElseGet(() -> {
+                    final LessonProgressEntity created = new LessonProgressEntity();
+                    created.setUserId(userId);
+                    created.setLessonId(lessonId);
+                    return created;
+                });
+        progressEntity.setCompletionDate(completionDate);
+        progressEntity.setTestResult(testResult);
+        final LessonProgressEntity saved = lessonProgressRepository.save(progressEntity);
+        return toDomain(saved);
     }
 
     /**
      * Возвращает одну запись прогресса по связке пользователь-урок.
      */
     public Optional<LessonProgress> getProgressEntry(final long userId, final long lessonId) {
-        return lessonProgressRepository.findByUserIdAndLessonId(userId, lessonId);
+        return lessonProgressRepository.findByUserIdAndLessonId(userId, lessonId).map(CourseProgressService::toDomain);
     }
 
     /**
@@ -91,22 +103,26 @@ public final class CourseProgressService {
     public List<LessonProgress> getProgressEntriesByUser(final long userId) {
         userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + userId));
-        return lessonProgressRepository.findByUserId(userId);
+        return lessonProgressRepository.findByUserId(userId).stream()
+                .map(CourseProgressService::toDomain)
+                .toList();
     }
 
     /**
      * Возвращает все записи прогресса в системе.
      */
     public List<LessonProgress> getAllProgressEntries() {
-        return lessonProgressRepository.findAll();
+        return lessonProgressRepository.findAll().stream()
+                .map(CourseProgressService::toDomain)
+                .toList();
     }
 
     /**
      * Удаляет запись прогресса по связке пользователь-урок.
      */
     public void deleteProgressEntry(final long userId, final long lessonId) {
-        final boolean deleted = lessonProgressRepository.deleteByUserIdAndLessonId(userId, lessonId);
-        if (!deleted) {
+        final long deleted = lessonProgressRepository.deleteByUserIdAndLessonId(userId, lessonId);
+        if (deleted == 0) {
             throw new IllegalArgumentException(
                     "Прогресс не найден для userId=" + userId + ", lessonId=" + lessonId
             );
@@ -117,14 +133,14 @@ public final class CourseProgressService {
      * Каскадно удаляет весь прогресс пользователя.
      */
     public int deleteAllProgressForUser(final long userId) {
-        return lessonProgressRepository.deleteByUserId(userId);
+        return (int) lessonProgressRepository.deleteByUserId(userId);
     }
 
     /**
      * Каскадно удаляет весь прогресс урока.
      */
     public int deleteAllProgressForLesson(final long lessonId) {
-        return lessonProgressRepository.deleteByLessonId(lessonId);
+        return (int) lessonProgressRepository.deleteByLessonId(lessonId);
     }
 
     /**
@@ -140,8 +156,10 @@ public final class CourseProgressService {
         userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + userId));
 
-        final List<Lesson> allLessons = lessonRepository.findAll();
-        final List<LessonProgress> userProgress = lessonProgressRepository.findByUserId(userId);
+        final List<LessonEntity> allLessons = lessonRepository.findAll();
+        final List<LessonProgress> userProgress = lessonProgressRepository.findByUserId(userId).stream()
+                .map(CourseProgressService::toDomain)
+                .toList();
         return progressCalculator.calculatePercent(allLessons.size(), userProgress);
     }
 
@@ -151,14 +169,16 @@ public final class CourseProgressService {
      * @return карта "пользователь -> прогресс в процентах"
      */
     public Map<User, Double> calculateAllUsersProgressPercent() {
-        final List<User> users = userRepository.findAll();
+        final List<UserEntity> users = userRepository.findAll();
         final int allLessonsCount = lessonRepository.findAll().size();
 
         final Map<User, Double> progressByUser = new LinkedHashMap<>();
-        for (final User user : users) {
-            final List<LessonProgress> userProgress = lessonProgressRepository.findByUserId(user.id());
+        for (final UserEntity user : users) {
+            final List<LessonProgress> userProgress = lessonProgressRepository.findByUserId(user.getId()).stream()
+                    .map(CourseProgressService::toDomain)
+                    .toList();
             final double progressPercent = progressCalculator.calculatePercent(allLessonsCount, userProgress);
-            progressByUser.put(user, progressPercent);
+            progressByUser.put(toDomain(user), progressPercent);
         }
 
         return progressByUser;
@@ -171,21 +191,34 @@ public final class CourseProgressService {
      * например, добавлять проверку дедлайнов, проверки попыток теста
      * или учет минимального проходного балла.
      */
+    private static LessonProgress toDomain(final LessonProgressEntity entity) {
+        return new LessonProgress(
+                entity.getUserId(),
+                entity.getLessonId(),
+                entity.getCompletionDate(),
+                entity.getTestResult()
+        );
+    }
+
+    private static User toDomain(final UserEntity entity) {
+        return new User(entity.getId(), entity.getLogin(), entity.getEmail(), entity.getRegistrationDate());
+    }
+
     private static void validateCompletionData(
-            final User user,
-            final Lesson lesson,
+            final UserEntity user,
+            final LessonEntity lesson,
             final LocalDate completionDate,
             final int testResult
     ) {
         if (completionDate == null) {
             throw new IllegalArgumentException("Дата завершения не может быть пустой");
         }
-        if (completionDate.isBefore(user.registrationDate())) {
+        if (completionDate.isBefore(user.getRegistrationDate())) {
             throw new IllegalArgumentException("Дата завершения не может быть раньше даты регистрации пользователя");
         }
-        if (testResult < 0 || testResult > lesson.test().maxScore()) {
+        if (testResult < 0 || testResult > lesson.getMaxTestScore()) {
             throw new IllegalArgumentException(
-                    "Результат теста должен быть в диапазоне от 0 до " + lesson.test().maxScore()
+                    "Результат теста должен быть в диапазоне от 0 до " + lesson.getMaxTestScore()
             );
         }
     }

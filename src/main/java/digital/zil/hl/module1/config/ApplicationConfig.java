@@ -12,8 +12,7 @@ import org.springframework.context.annotation.Configuration;
 /**
  * Явно объявляем бины приложения.
  *
- * <p>Контракты репозиториев объявлены в package repository,
- * а JDBC-реализации находятся в package repository.jdbc.
+ * <p>Репозитории работают в стиле Spring Data JPA.
  */
 @Configuration
 public class ApplicationConfig {

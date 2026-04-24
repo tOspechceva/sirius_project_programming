@@ -4,6 +4,7 @@ import digital.zil.hl.module1.api.dto.CompleteLessonRequest;
 import digital.zil.hl.module1.api.dto.LessonProgressResponse;
 import digital.zil.hl.module1.api.dto.UpdateLessonProgressRequest;
 import digital.zil.hl.module1.api.dto.UserProgressResponse;
+import digital.zil.hl.module1.entity.UserEntity;
 import digital.zil.hl.module1.model.LessonProgress;
 import digital.zil.hl.module1.model.User;
 import digital.zil.hl.module1.repository.UserRepository;
@@ -115,6 +116,7 @@ public class ProgressController {
     @GetMapping("/users/{userId}")
     public UserProgressResponse getUserProgress(@PathVariable final long userId) {
         final User user = userRepository.findById(userId)
+                .map(ProgressController::toDomain)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + userId));
         final double progressPercent = courseProgressService.calculateUserProgressPercent(userId);
         return toUserProgressResponse(user, progressPercent);
@@ -130,6 +132,10 @@ public class ProgressController {
 
     private static UserProgressResponse toUserProgressResponse(final User user, final double progressPercent) {
         return new UserProgressResponse(user.id(), user.login(), user.email(), progressPercent);
+    }
+
+    private static User toDomain(final UserEntity entity) {
+        return new User(entity.getId(), entity.getLogin(), entity.getEmail(), entity.getRegistrationDate());
     }
 
     private static LessonProgressResponse toProgressResponse(final LessonProgress progress) {

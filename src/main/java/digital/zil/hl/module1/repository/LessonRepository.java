@@ -1,20 +1,13 @@
 package digital.zil.hl.module1.repository;
 
-import digital.zil.hl.module1.model.Lesson;
+import digital.zil.hl.module1.entity.LessonEntity;
 import java.util.List;
-import java.util.Optional;
+import org.springframework.data.repository.CrudRepository;
 
 /**
  * Репозиторий уроков.
  */
-public interface LessonRepository {
-    Lesson create(String topic, int videoDurationMinutes, String testName, int maxTestScore);
-
-    Optional<Lesson> findById(long id);
-
-    Optional<Lesson> update(long id, String topic, int videoDurationMinutes, String testName, int maxTestScore);
-
-    boolean deleteById(long id);
-
-    List<Lesson> findAll();
+public interface LessonRepository extends CrudRepository<LessonEntity, Long> {
+    @Override
+    List<LessonEntity> findAll();
 }

@@ -9,12 +9,12 @@ if (-not (Test-Path $resultsDir)) {
 
 foreach ($vus in $vusPoints) {
     $summaryFile = "/scripts/results/summary-vus-$vus.json"
-    Write-Host "Running k6 test for VUs=$vus"
+    Write-Host "Running k6 test for total VUs=$vus (POST/GET split by pools)"
 
     docker compose run --rm k6 run /scripts/load-test.js `
         -e BASE_URL=http://app:8081 `
         -e TARGET_VUS=$vus `
-        -e POST_RATIO=0.5 `
+        -e POST_POOL_RATIO=0.5 `
         -e RAMP_UP=20s `
         -e STEADY_DURATION=40s `
         -e RAMP_DOWN=15s `

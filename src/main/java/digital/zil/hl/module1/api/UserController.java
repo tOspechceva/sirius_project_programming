@@ -3,6 +3,7 @@ package digital.zil.hl.module1.api;
 import digital.zil.hl.module1.api.dto.CreateUserRequest;
 import digital.zil.hl.module1.api.dto.UpdateUserRequest;
 import digital.zil.hl.module1.api.dto.UserResponse;
+import digital.zil.hl.module1.entity.UserEntity;
 import digital.zil.hl.module1.model.User;
 import digital.zil.hl.module1.repository.UserRepository;
 import digital.zil.hl.module1.service.CourseProgressService;
@@ -37,17 +38,18 @@ public class UserController {
 
     @PostMapping
     public ResponseEntity<UserResponse> createUser(@RequestBody final CreateUserRequest request) {
-        final User created = userRepository.create(
-                request.login(),
-                request.email(),
-                request.registrationDate()
-        );
-        return ResponseEntity.status(HttpStatus.CREATED).body(toUserResponse(created));
+        final UserEntity entity = new UserEntity();
+        entity.setLogin(request.login());
+        entity.setEmail(request.email());
+        entity.setRegistrationDate(request.registrationDate());
+        final UserEntity created = userRepository.save(entity);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toUserResponse(toDomain(created)));
     }
 
     @GetMapping
     public List<UserResponse> getAllUsers() {
         return userRepository.findAll().stream()
+                .map(UserController::toDomain)
                 .map(UserController::toUserResponse)
                 .toList();
     }
@@ -55,6 +57,7 @@ public class UserController {
     @GetMapping("/{id}")
     public UserResponse getUserById(@PathVariable final long id) {
         final User user = userRepository.findById(id)
+                .map(UserController::toDomain)
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + id));
         return toUserResponse(user);
     }
@@ -64,24 +67,29 @@ public class UserController {
             @PathVariable final long id,
             @RequestBody final UpdateUserRequest request
     ) {
-        final User updated = userRepository.update(
-                        id,
-                        request.login(),
-                        request.email(),
-                        request.registrationDate()
-                )
+        final UserEntity updated = userRepository.findById(id)
+                .map(entity -> {
+                    entity.setLogin(request.login());
+                    entity.setEmail(request.email());
+                    entity.setRegistrationDate(request.registrationDate());
+                    return userRepository.save(entity);
+                })
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + id));
-        return toUserResponse(updated);
+        return toUserResponse(toDomain(updated));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable final long id) {
         courseProgressService.deleteAllProgressForUser(id);
-        final boolean deleted = userRepository.deleteById(id);
-        if (!deleted) {
+        if (!userRepository.existsById(id)) {
             throw new IllegalArgumentException("Пользователь не найден: " + id);
         }
+        userRepository.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    private static User toDomain(final UserEntity entity) {
+        return new User(entity.getId(), entity.getLogin(), entity.getEmail(), entity.getRegistrationDate());
     }
 
     private static UserResponse toUserResponse(final User user) {

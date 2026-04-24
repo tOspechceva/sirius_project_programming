@@ -1,29 +1,28 @@
 package digital.zil.hl.module1.repository;
 
-import digital.zil.hl.module1.model.LessonProgress;
-import java.time.LocalDate;
+import digital.zil.hl.module1.entity.LessonProgressEntity;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.repository.CrudRepository;
 
 /**
  * Репозиторий прогресса обучения.
  *
  * <p>Сущность прогресса является связью многие-ко-многим между пользователем и уроком.
  */
-public interface LessonProgressRepository {
-    LessonProgress completeLesson(long userId, long lessonId, LocalDate completionDate, int testResult);
+public interface LessonProgressRepository extends CrudRepository<LessonProgressEntity, Long> {
+    @Override
+    List<LessonProgressEntity> findAll();
 
-    Optional<LessonProgress> findByUserIdAndLessonId(long userId, long lessonId);
+    Optional<LessonProgressEntity> findByUserIdAndLessonId(Long userId, Long lessonId);
 
-    List<LessonProgress> findByUserId(long userId);
+    List<LessonProgressEntity> findByUserId(Long userId);
 
-    List<LessonProgress> findByLessonId(long lessonId);
+    List<LessonProgressEntity> findByLessonId(Long lessonId);
 
-    boolean deleteByUserIdAndLessonId(long userId, long lessonId);
+    long deleteByUserIdAndLessonId(Long userId, Long lessonId);
 
-    int deleteByUserId(long userId);
+    long deleteByUserId(Long userId);
 
-    int deleteByLessonId(long lessonId);
-
-    List<LessonProgress> findAll();
+    long deleteByLessonId(Long lessonId);
 }
