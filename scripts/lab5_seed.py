@@ -1,215 +1,359 @@
 #!/usr/bin/env python3
-"""Сидер данных LAB5 для REST API (requests + Faker)."""
+"""
+Сидер данных LAB5 для REST API (requests + Faker).
 
-from __future__ import annotations
+Этот скрипт автоматически генерирует тестовые данные для трёх эндпоинтов:
+- users: пользователи с уникальными логинами и почтами
+- lessons: учебные материалы с параметрами теста
+- progress: связи многие-ко-многим (кто какой урок прошёл и с каким результатом)
 
-import argparse
-import random
-import sys
-from datetime import date
-from typing import Any
+Поддерживает режимы: генерация, полная очистка, точечное удаление.
+"""
 
-import requests
-from faker import Faker
+# Библиотеки для работы с аргументами командной строки и системными функциями
+from __future__ import annotations  # Включение современной аннотации типов (например, int | None)
+
+import argparse   # Парсинг аргументов командной строки (--count, --endpoint и т.д.)
+import random     # Генерация случайных чисел для вариативности данных
+import sys        # Системные функции, включая корректный выход из скрипта
+from datetime import date  # Работа с датами (используется Faker, но импортируем для ясности)
+from typing import Any     # Тип Any для гибкой типизации словарей и ответов API
+
+# Сторонние зависимости
+import requests   # HTTP-клиент для отправки запросов к REST API
+from faker import Faker  # Генератор реалистичных фейковых данных (имена, почты, даты)
 
 
+# ============================================================================
+# ПАРСИНГ АРГУМЕНТОВ КОМАНДНОЙ СТРОКИ
+# ============================================================================
 def parse_args() -> argparse.Namespace:
-    # CLI-параметры для очистки и генерации данных.
-    # Логика запуска скрипта:
-    # 1) (опционально) очищаем endpoint через --clear
-    # 2) создаем --count сущностей для выбранного --endpoint
-    # 3) для progress автоматически дозаполняем зависимости (users/lessons), если их не хватает
+    """
+    Настраивает и разбирает аргументы командной строки.
+    Возвращает объект с полями: count, endpoint, clear, id, base_url.
+    """
+    # Создаём парсер с описанием — это текст, который увидит пользователь при --help
     parser = argparse.ArgumentParser(description="Seed REST service with test data")
-    parser.add_argument("--count", type=int, default=500, help="number of objects to create (default: 500)")
+    
+    # --count: сколько записей создать (по умолчанию 500)
+    parser.add_argument(
+        "--count",
+        type=int,
+        default=500,
+        help="number of objects to create (default: 500)"
+    )
+    
+    # --endpoint: обязательный выбор одной из трёх сущностей
     parser.add_argument(
         "--endpoint",
-        choices=["users", "lessons", "progress"],
-        required=True,
-        help="target endpoint to fill",
+        choices=["users", "lessons", "progress"],  # Ограничиваем допустимые значения
+        required=True,                              # Если не указан — скрипт завершится с ошибкой
+        help="target endpoint to fill"
     )
+    
+    # --clear: флаг (без значения), который активирует режим очистки перед генерацией
     parser.add_argument(
         "--clear",
-        action="store_true",
-        help="clear target data before generation (or delete by --id)",
+        action="store_true",  # Если флаг есть — значение True, иначе False
+        help="clear target data before generation (or delete by --id)"
     )
+    
+    # --id: опциональный числовой ID для точечного удаления (работает только с --clear)
     parser.add_argument(
         "--id",
         type=int,
-        help="delete one object by id for users/lessons (used with --clear)",
+        help="delete one object by id for users/lessons (used with --clear)"
     )
+    
+    # --base-url: адрес API, чтобы не хардкодить localhost в коде
     parser.add_argument(
         "--base-url",
         default="http://localhost:8082",
-        help="base URL for API (default: http://localhost:8082)",
+        help="base URL for API (default: http://localhost:8082)"
     )
+    
+    # Возвращаем распарсенные аргументы как объект с атрибутами
     return parser.parse_args()
 
 
+# ============================================================================
+#  УНИВЕРСАЛЬНЫЙ ОТПРАВИТЕЛЬ ЗАПРОСОВ С ОБРАБОТКОЙ ОШИБОК
+# ============================================================================
 def request_or_fail(session: requests.Session, method: str, url: str, **kwargs: Any) -> requests.Response:
-    # Единая точка HTTP-запроса: сетевые ошибки и 4xx/5xx завершают скрипт.
-    # Это упрощает отладку — место падения всегда видно сразу с URL и методом.
+    """
+    Отправляет HTTP-запрос и гарантированно останавливает скрипт при любой ошибке.
+    
+    Почему так? Чтобы не «молча» пропускать сбои сети или баги сервера,
+    которые могут привести к некорректным тестовым данным.
+    """
     try:
+        # Выполняем запрос с таймаутом 15 секунд (защита от «вечных» зависаний)
         response = session.request(method, url, timeout=15, **kwargs)
     except requests.RequestException as exc:
+        # Сетевые ошибки: сервер недоступен, таймаут, неверный сертификат и т.п.
+        # SystemExit — корректный способ завершить скрипт с кодом ошибки
         raise SystemExit(f"Request failed: {method} {url}: {exc}") from exc
 
+    # Проверяем HTTP-статус: 4xx (ошибка клиента) и 5xx (ошибка сервера) — это тоже провал
     if response.status_code >= 400:
+        # Выводим тело ответа — там часто бывает полезное сообщение об ошибке от сервера
         raise SystemExit(f"API error {response.status_code} for {method} {url}: {response.text}")
+    
+    # Если всё ок — возвращаем успешный ответ для дальнейшей обработки
     return response
 
 
+# ============================================================================
+# 📥 ПОЛУЧЕНИЕ СПИСКА СУЩНОСТЕЙ С ПРОВЕРКОЙ ФОРМАТА
+# ============================================================================
 def fetch_list(session: requests.Session, base_url: str, endpoint: str) -> list[dict[str, Any]]:
-    # Получаем список сущностей и проверяем, что API вернул массив.
-    # Нужен для:
-    # - валидации зависимостей перед генерацией progress
-    # - получения id уже созданных users/lessons
+    """
+    Запрашивает список всех объектов эндпоинта и валидирует, что ответ — это массив.
+    
+    Зачем проверка типа? Чтобы сразу отловить случаи, когда сервер вернул ошибку
+    в виде JSON-объекта {"error": "..."}, а не ожидаемый список [].
+    """
+    # Делаем GET-запрос к /api/{endpoint}
     response = request_or_fail(session, "GET", f"{base_url}/api/{endpoint}")
+    # Парсим JSON-ответ
     data = response.json()
+    
+    # Убеждаемся, что пришли именно данные (список), а не ошибка или другая структура
     if not isinstance(data, list):
         raise SystemExit(f"Unexpected payload from /api/{endpoint}: {data}")
+    
     return data
 
 
+# ============================================================================
+# 🧹 ОЧИСТКА ДАННЫХ: ПОЛНАЯ ИЛИ ТОЧЕЧНАЯ
+# ============================================================================
 def clear_target(session: requests.Session, base_url: str, endpoint: str, object_id: int | None) -> None:
-    # Режим точечного удаления (по id) поддержан для users/lessons.
-    # Для progress удаление по id не используется, т.к. ключ там составной (userId+lessonId)
-    # и проще очищать через /api/progress/clear.
+    """
+    Удаляет данные перед новой генерацией.
+    
+    Два режима:
+    1. Точечное удаление по ID (только для users/lessons)
+    2. Полная очистка через специальный эндпоинт /clear
+    """
+    # ── Режим 1: удалить одну запись по ID ──
     if object_id is not None:
+        # Защита: прогресс не поддерживает удаление по ID (сложная связь многие-ко-многим)
         if endpoint not in {"users", "lessons"}:
             raise SystemExit("--id supports only users or lessons")
+        
+        # Отправляем DELETE /api/{endpoint}/{id}
         request_or_fail(session, "DELETE", f"{base_url}/api/{endpoint}/{object_id}")
         print(f"Deleted /api/{endpoint}/{object_id}")
-        return
+        return  # Выходим, чтобы не выполнять полную очистку ниже
 
-    # Полная очистка сущности через специальные /clear endpoint-ы.
+    # ── Режим 2: полная очистка коллекции ──
+    # Предполагается, что на сервере есть специальный эндпоинт /clear для каждого ресурса
     request_or_fail(session, "DELETE", f"{base_url}/api/{endpoint}/clear")
     print(f"Cleared /api/{endpoint}")
 
 
+# ============================================================================
+# 👥 ГЕНЕРАЦИЯ ПОЛЬЗОВАТЕЛЕЙ
+# ============================================================================
 def seed_users(session: requests.Session, base_url: str, count: int, faker: Faker) -> None:
-    # Генерируем уникальные логины/почты, чтобы не ловить unique conflicts.
-    # registrationDate ограничиваем последними 2 годами, чтобы дата была реалистичной
-    # и не конфликтовала с последующей генерацией progress.
+    """
+    Создаёт N пользователей с гарантированно уникальными логинами и почтами.
+    
+    Почему уникальность критична? Чтобы избежать ошибок 409 Conflict
+    при попытке создать дубликат в базе данных.
+    """
     for i in range(count):
+        # Формируем реалистичный и уникальный payload
         payload = {
+            # login: имя_пользователя_индекс_рандом → например, ivan_petrov_123_4567
             "login": f"{faker.user_name()}_{i}_{random.randint(1000, 9999)}",
+            # email: используем faker.unique, чтобы исключить повторения даже внутри одного запуска
             "email": f"{faker.unique.email()}",
+            # registrationDate: случайная дата за последние 2 года (как в реальной жизни)
             "registrationDate": str(faker.date_between(start_date="-2y", end_date="today")),
         }
+        # Отправляем POST-запрос на создание
         request_or_fail(session, "POST", f"{base_url}/api/users", json=payload)
+    
+    # По завершении — отчёт в консоль
     print(f"Created users: {count}")
 
 
+# ============================================================================
+# 📚 ГЕНЕРАЦИЯ УРОКОВ
+# ============================================================================
 def seed_lessons(session: requests.Session, base_url: str, count: int, faker: Faker) -> None:
-    # Генерируем базовые поля урока в правдоподобных диапазонах.
-    # maxTestScore делаем случайным: позже seed_progress использует это ограничение,
-    # чтобы testResult всегда был валидным для конкретного урока.
+    """
+    Создаёт N учебных материалов с правдоподобными параметрами.
+    """
     for i in range(count):
         payload = {
+            # topic: профессия + номер → "Инженер-программист #1"
             "topic": f"{faker.job()} #{i + 1}",
+            # videoDurationMinutes: реалистичная длительность урока (10–120 минут)
             "videoDurationMinutes": random.randint(10, 120),
+            # testName: стандартное название теста
             "testName": f"Quiz {i + 1}",
+            # maxTestScore: максимальный балл за тест (10–100)
             "maxTestScore": random.randint(10, 100),
         }
         request_or_fail(session, "POST", f"{base_url}/api/lessons", json=payload)
+    
     print(f"Created lessons: {count}")
 
 
+# ============================================================================
+#  ПОДГОТОВКА ЗАВИСИМОСТЕЙ ДЛЯ PROGRESS
+# ============================================================================
 def ensure_users_and_lessons(session: requests.Session, base_url: str, count: int, faker: Faker) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    # Для progress нужны зависимости: сначала гарантируем минимум users и lessons.
-    # Здесь count — не "сколько progress создать", а нижняя граница для таблиц-родителей.
+    """
+    Гарантирует, что в базе есть достаточно пользователей и уроков для генерации прогресса.
+    
+    Зачем это нужно? Прогресс — это связь между пользователем и уроком.
+    Нельзя создать запись о прохождении, если самих сущностей не существует.
+    """
+    # Получаем текущие списки с сервера
     users = fetch_list(session, base_url, "users")
     lessons = fetch_list(session, base_url, "lessons")
 
+    # Если пользователей мало — досоздаём недостающее количество
     if len(users) < count:
         seed_users(session, base_url, count - len(users), faker)
+        # Обновляем список, чтобы использовать и новые записи тоже
         users = fetch_list(session, base_url, "users")
+    
+    # Аналогично для уроков
     if len(lessons) < count:
         seed_lessons(session, base_url, count - len(lessons), faker)
         lessons = fetch_list(session, base_url, "lessons")
 
+    # Возвращаем кортеж (список пользователей, список уроков) для дальнейшего использования
     return users, lessons
 
 
+# ============================================================================
+# 📊 ГЕНЕРАЦИЯ ПРОГРЕССА (связи многие-ко-многим)
+# ============================================================================
 def seed_progress(session: requests.Session, base_url: str, count: int, faker: Faker) -> None:
-    # Для связей many-to-many собираем уникальные пары (userId, lessonId).
-    # Ограничиваем минимальное количество зависимостей сверху (200), чтобы не создавать
-    # слишком большой лишний объем users/lessons при очень большом --count.
+    """
+    Создаёт записи о прохождении уроков пользователями.
+    
+    Особенности:
+    - Уникальные пары (userId, lessonId): один пользователь не может дважды пройти один урок
+    - Валидация балла: testResult не может превышать maxTestScore конкретного урока
+    - Защита от бесконечного цикла при генерации уникальных пар
+    """
+    # Шаг 1: убеждаемся, что есть достаточно пользователей и уроков (минимум 1, максимум 200 для стабильности)
     users, lessons = ensure_users_and_lessons(session, base_url, max(1, min(count, 200)), faker)
+    
+    # Множество для хранения уже созданных пар (защита от дублей)
     pairs: set[tuple[int, int]] = set()
-    attempts = 0
+    attempts = 0  # Счётчик попыток — защита от зацикливания, если запрошено больше пар, чем возможно
 
-    # Генерируем уникальные пары до нужного объема.
-    # attempts ограничивает цикл, если комбинаций уже не хватает
-    # (например, мало users/lessons для очень большого count).
+    # Шаг 2: генерируем уникальные комбинации (userId, lessonId)
     while len(pairs) < count and attempts < count * 10:
+        # Случайный выбор пользователя и урока из существующих
         user = random.choice(users)
         lesson = random.choice(lessons)
+        # Добавляем в множество: дубли автоматически игнорируются
         pairs.add((int(user["id"]), int(lesson["id"])))
         attempts += 1
 
+    # Индексы по id, чтобы не искать пользователя/урок каждый раз линейным проходом.
+    users_by_id = {int(user["id"]): user for user in users}
+    lessons_by_id = {int(lesson["id"]): lesson for lesson in lessons}
+
+    # Шаг 3: создаём записи прогресса для каждой уникальной пары
     created = 0
     for user_id, lesson_id in pairs:
-        # completionDate берется в пределах 1 года и дальше валидируется на стороне API:
-        # дата должна быть не раньше registrationDate пользователя.
-        completion = faker.date_between(start_date="-1y", end_date="today")
+        # Дата завершения должна быть не раньше даты регистрации пользователя.
+        # Иначе API вернёт 400: "Дата завершения не может быть раньше даты регистрации пользователя".
+        user = users_by_id.get(user_id)
+        reg_raw = user.get("registrationDate") if user is not None else None
+        reg_date = date.fromisoformat(reg_raw) if reg_raw else date.today()
+        completion = faker.date_between(start_date=reg_date, end_date="today")
+        
         payload = {
             "userId": user_id,
             "lessonId": lesson_id,
             "completionDate": str(completion),
+            # Временное значение балла (ниже скорректируем)
             "testResult": random.randint(0, 100),
         }
 
-        # Балл теста не должен превышать maxTestScore конкретного урока.
-        # Если урок найден — сужаем диапазон; это снижает количество 400-ответов.
-        lesson = next((item for item in lessons if int(item["id"]) == lesson_id), None)
+        # 🔍 Важная бизнес-логика: балл не может быть больше максимального для этого урока
+        lesson = lessons_by_id.get(lesson_id)
         if lesson is not None:
+            # Пересчитываем testResult в допустимом диапазоне [0, maxTestScore]
             payload["testResult"] = random.randint(0, int(lesson["maxTestScore"]))
 
+        # Отправляем запрос на создание записи прогресса
         request_or_fail(session, "POST", f"{base_url}/api/progress", json=payload)
         created += 1
 
     print(f"Created progress rows: {created}")
 
 
+# ============================================================================
+# 🚀 ТОЧКА ВХОДА: MAIN
+# ============================================================================
 def main() -> None:
+    """
+    Главная функция: координирует весь процесс сидинга.
+    """
+    # 1. Парсим аргументы командной строки
     args = parse_args()
+    
+    # Валидация: нельзя создать отрицательное количество записей
     if args.count < 0:
         raise SystemExit("--count must be >= 0")
 
-    # Русская локаль Faker дает более реалистичные данные для демонстрации.
+    # 2. Инициализируем генератор фейковых данных с русской локалью
+    # (имена, адреса, профессии будут на русском — реалистичнее для демо)
     faker = Faker("ru_RU")
+    # Инициализируем генератор случайных чисел (для воспроизводимости можно зафиксировать seed)
     random.seed()
 
+    # 3. Используем Session для переиспользования соединения (keep-alive, куки, заголовки)
     with requests.Session() as session:
+        # Устанавливаем заголовок по умолчанию для всех запросов
         session.headers.update({"Content-Type": "application/json"})
 
-        # Сначала опциональная очистка, затем генерация нужного объема.
+        # 4. Опциональная очистка данных перед генерацией
         if args.clear:
             clear_target(session, args.base_url, args.endpoint, args.id)
-            # Для точечного удаления (delete by id) на этом завершаем работу.
+            # Если было точечное удаление (--id) — дальше ничего не делаем, выходим
             if args.id is not None:
                 return
 
+        # 5. Если count=0 — ничего не генерируем (удобно для режима "только очистка")
         if args.count == 0:
-            # Допустимый режим: только очистить и не создавать новые данные.
             print("Nothing to generate: --count 0")
             return
 
+        # 6. Запускаем генерацию нужного типа сущностей
         if args.endpoint == "users":
             seed_users(session, args.base_url, args.count, faker)
         elif args.endpoint == "lessons":
             seed_lessons(session, args.base_url, args.count, faker)
         else:
-            # Прогресс создаем только после проверки/дозаполнения зависимых сущностей.
+            # Для progress сначала подготавливаем зависимости, потом генерируем связи
             seed_progress(session, args.base_url, args.count, faker)
 
+    # 7. Финальное сообщение об успешном завершении
     print("Done.")
 
 
+# ============================================================================
+# 🏁 ЗАПУСК СКРИПТА
+# ============================================================================
 if __name__ == "__main__":
     try:
+        # Запускаем главную логику
         main()
     except KeyboardInterrupt:
+        # Обработка прерывания пользователем (Ctrl+C)
         print("\nInterrupted.", file=sys.stderr)
+        # Код выхода 130 — стандартный код для завершения по SIGINT
         raise SystemExit(130)

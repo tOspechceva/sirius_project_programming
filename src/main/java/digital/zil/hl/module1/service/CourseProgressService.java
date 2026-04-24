@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Центральный сервис бизнес-логики платформы онлайн-курсов.
@@ -30,7 +31,7 @@ import java.util.Optional;
  * ({@link ProgressCalculator}), поэтому логику хранения и формулу прогресса
  * можно менять без изменения этого класса.
  */
-public final class CourseProgressService {
+public class CourseProgressService {
     private final UserRepository userRepository;
     private final LessonRepository lessonRepository;
     private final LessonProgressRepository lessonProgressRepository;
@@ -65,6 +66,7 @@ public final class CourseProgressService {
      * @param testResult полученный балл по тесту
      * @return сохраненная запись прогресса (связь пользователь-урок)
      */
+    @Transactional
     public LessonProgress markLessonCompleted(
             final long userId,
             final long lessonId,
@@ -120,6 +122,7 @@ public final class CourseProgressService {
     /**
      * Удаляет запись прогресса по связке пользователь-урок.
      */
+    @Transactional
     public void deleteProgressEntry(final long userId, final long lessonId) {
         final long deleted = lessonProgressRepository.deleteByUserIdAndLessonId(userId, lessonId);
         if (deleted == 0) {
@@ -132,6 +135,7 @@ public final class CourseProgressService {
     /**
      * Каскадно удаляет весь прогресс пользователя.
      */
+    @Transactional
     public int deleteAllProgressForUser(final long userId) {
         return (int) lessonProgressRepository.deleteByUserId(userId);
     }
@@ -139,6 +143,7 @@ public final class CourseProgressService {
     /**
      * Каскадно удаляет весь прогресс урока.
      */
+    @Transactional
     public int deleteAllProgressForLesson(final long lessonId) {
         return (int) lessonProgressRepository.deleteByLessonId(lessonId);
     }
@@ -146,6 +151,7 @@ public final class CourseProgressService {
     /**
      * Удаляет весь прогресс в системе.
      */
+    @Transactional
     public int deleteAllProgress() {
         final int total = lessonProgressRepository.findAll().size();
         lessonProgressRepository.deleteAll();
