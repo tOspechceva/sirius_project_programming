@@ -34,6 +34,11 @@ services:
       SPRING_JPA_SHOW_SQL: "false"
     ports:
       - "8082:8081"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1024M
 
   k6:
     image: grafana/k6:0.52.0
