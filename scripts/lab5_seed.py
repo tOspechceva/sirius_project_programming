@@ -2,10 +2,11 @@
 """
 Сидер данных LAB5 для REST API (requests + Faker).
 
-Этот скрипт автоматически генерирует тестовые данные для трёх эндпоинтов:
+Этот скрипт автоматически генерирует тестовые данные для эндпоинтов:
 - users: пользователи с уникальными логинами и почтами
 - lessons: учебные материалы с параметрами теста
 - progress: связи многие-ко-многим (кто какой урок прошёл и с каким результатом)
+- all: специальный режим для очистки всех таблиц одной командой
 
 Поддерживает режимы: генерация, полная очистка, точечное удаление.
 """
@@ -46,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     # --endpoint: обязательный выбор одной из трёх сущностей
     parser.add_argument(
         "--endpoint",
-        choices=["users", "lessons", "progress"],  # Ограничиваем допустимые значения
+        choices=["users", "lessons", "progress", "all"],  # Ограничиваем допустимые значения
         required=True,                              # Если не указан — скрипт завершится с ошибкой
         help="target endpoint to fill"
     )
@@ -153,6 +154,21 @@ def clear_target(session: requests.Session, base_url: str, endpoint: str, object
     print(f"Cleared /api/{endpoint}")
 
 
+def clear_all_targets(session: requests.Session, base_url: str) -> None:
+    """
+    Полная очистка всех таблиц приложения одной функцией.
+
+    Порядок важен:
+    1) progress (таблица-связка, содержит внешние ключи),
+    2) users,
+    3) lessons.
+    """
+    request_or_fail(session, "DELETE", f"{base_url}/api/progress/clear")
+    request_or_fail(session, "DELETE", f"{base_url}/api/users/clear")
+    request_or_fail(session, "DELETE", f"{base_url}/api/lessons/clear")
+    print("Cleared all targets: progress, users, lessons")
+
+
 # ============================================================================
 # 👥 ГЕНЕРАЦИЯ ПОЛЬЗОВАТЕЛЕЙ
 # ============================================================================
@@ -206,7 +222,9 @@ def seed_lessons(session: requests.Session, base_url: str, count: int, faker: Fa
 # ============================================================================
 #  ПОДГОТОВКА ЗАВИСИМОСТЕЙ ДЛЯ PROGRESS
 # ============================================================================
-def ensure_users_and_lessons(session: requests.Session, base_url: str, count: int, faker: Faker) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def ensure_users_and_lessons(
+    session: requests.Session, base_url: str, count: int, faker: Faker
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
     Гарантирует, что в базе есть достаточно пользователей и уроков для генерации прогресса.
     
@@ -217,15 +235,19 @@ def ensure_users_and_lessons(session: requests.Session, base_url: str, count: in
     users = fetch_list(session, base_url, "users")
     lessons = fetch_list(session, base_url, "lessons")
 
-    # Если пользователей мало — досоздаём недостающее количество
-    if len(users) < count:
-        seed_users(session, base_url, count - len(users), faker)
-        # Обновляем список, чтобы использовать и новые записи тоже
+    # В LAB5 важно не "раздувать" родительские таблицы без необходимости.
+    # Поэтому users/lessons дозаполняем только если таблица полностью пустая.
+    # Если записи уже есть, используем их как есть.
+    # Если таблица пуста, создаём базовый объём до половины requested count.
+    # Пример: progress --count 100 -> users/lessons по 50.
+    bootstrap_count = max(1, count // 2)
+
+    if len(users) == 0:
+        seed_users(session, base_url, bootstrap_count, faker)
         users = fetch_list(session, base_url, "users")
-    
-    # Аналогично для уроков
-    if len(lessons) < count:
-        seed_lessons(session, base_url, count - len(lessons), faker)
+
+    if len(lessons) == 0:
+        seed_lessons(session, base_url, bootstrap_count, faker)
         lessons = fetch_list(session, base_url, "lessons")
 
     # Возвращаем кортеж (список пользователей, список уроков) для дальнейшего использования
@@ -244,8 +266,18 @@ def seed_progress(session: requests.Session, base_url: str, count: int, faker: F
     - Валидация балла: testResult не может превышать maxTestScore конкретного урока
     - Защита от бесконечного цикла при генерации уникальных пар
     """
-    # Шаг 1: убеждаемся, что есть достаточно пользователей и уроков (минимум 1, максимум 200 для стабильности)
-    users, lessons = ensure_users_and_lessons(session, base_url, max(1, min(count, 200)), faker)
+    # Шаг 1: получаем зависимости. Если таблицы пустые — создаём по половине count.
+    users, lessons = ensure_users_and_lessons(session, base_url, count, faker)
+
+    max_pairs = len(users) * len(lessons)
+    if max_pairs == 0:
+        raise SystemExit("Cannot generate progress: users or lessons are empty.")
+    if count > max_pairs:
+        raise SystemExit(
+            f"Cannot generate {count} unique progress rows with current data. "
+            f"Maximum possible pairs: {max_pairs}. "
+            "Add more users/lessons or reduce --count."
+        )
     
     # Множество для хранения уже созданных пар (защита от дублей)
     pairs: set[tuple[int, int]] = set()
@@ -322,7 +354,13 @@ def main() -> None:
 
         # 4. Опциональная очистка данных перед генерацией
         if args.clear:
-            clear_target(session, args.base_url, args.endpoint, args.id)
+            if args.endpoint == "all":
+                if args.id is not None:
+                    raise SystemExit("--id is not supported with --endpoint all")
+                clear_all_targets(session, args.base_url)
+                return
+            else:
+                clear_target(session, args.base_url, args.endpoint, args.id)
             # Если было точечное удаление (--id) — дальше ничего не делаем, выходим
             if args.id is not None:
                 return
@@ -333,7 +371,11 @@ def main() -> None:
             return
 
         # 6. Запускаем генерацию нужного типа сущностей
-        if args.endpoint == "users":
+        if args.endpoint == "all":
+            # Для endpoint=all генерация не поддерживается — это режим очистки.
+            # Используйте: --endpoint all --clear
+            raise SystemExit("Generation for --endpoint all is not supported. Use --endpoint all --clear")
+        elif args.endpoint == "users":
             seed_users(session, args.base_url, args.count, faker)
         elif args.endpoint == "lessons":
             seed_lessons(session, args.base_url, args.count, faker)

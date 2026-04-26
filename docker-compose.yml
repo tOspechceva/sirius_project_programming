@@ -30,6 +30,8 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/hl_module1
       DB_USERNAME: postgres
       DB_PASSWORD: postgres
+      SERVER_TOMCAT_MAX_THREADS: "200"
+      SPRING_JPA_SHOW_SQL: "false"
     ports:
       - "8082:8081"
 
