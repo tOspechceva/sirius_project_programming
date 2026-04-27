@@ -18,16 +18,17 @@ services:
       retries: 5
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: 10.60.3.11:8888/tospe/hl-module1:lab6
     container_name: hl-module1-app
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/hl_module1
+      DBHOST: postgres
+      DBPORT: "5432"
+      DBNAME: hl_module1
+      SCHEMANAME: public
       DB_USERNAME: postgres
       DB_PASSWORD: postgres
       SERVER_TOMCAT_MAX_THREADS: "200"
