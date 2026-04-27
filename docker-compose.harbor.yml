@@ -1,0 +1,4 @@
+services:
+  app:
+    image: 10.60.3.11:8888/tospe/hl-module1:lab6
+    build: null
