@@ -9,8 +9,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       # Явный URL: Spring Boot отдает приоритет SPRING_DATASOURCE_URL над properties.
-      SPRING_DATASOURCE_URL: jdbc:postgresql://${DBHOST:-hl12.zil}:${DBPORT:-5433}/${DBNAME:-hl6}?currentSchema=${SCHEMANAME:-public}
-      DBHOST: ${DBHOST:-hl12.zil}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${DBHOST:-192.168.1.184}:${DBPORT:-5433}/${DBNAME:-hl6}?currentSchema=${SCHEMANAME:-public}
+      DBHOST: ${DBHOST:-192.168.1.184}
       DBPORT: ${DBPORT:-5433}
       DBNAME: ${DBNAME:-hl6}
       SCHEMANAME: ${SCHEMANAME:-public}
