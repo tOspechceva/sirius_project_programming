@@ -29,7 +29,7 @@ services:
       DBNAME: ${DBNAME:-hl6}
       SCHEMANAME: public
       DB_USERNAME: ${DB_USERNAME:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-hl_postgres}
       SERVER_TOMCAT_MAX_THREADS: "200"
       SPRING_JPA_SHOW_SQL: "false"
     ports:
