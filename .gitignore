@@ -52,3 +52,6 @@ Thumbs.db
 *.wmv
 
 LAB6.md
+
+# k6 generated result artifacts
+k6/results/

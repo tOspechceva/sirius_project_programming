@@ -3,6 +3,7 @@ services:
     image: postgres:16
     container_name: hl-module1-postgres
     restart: unless-stopped
+    profiles: ["local-db"]
     environment:
       POSTGRES_DB: hl_module1
       POSTGRES_USER: postgres
@@ -21,16 +22,14 @@ services:
     image: 10.60.3.11:8888/tospe/hl-module1:lab6
     container_name: hl-module1-app
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
+    depends_on: []
     environment:
-      DBHOST: postgres
-      DBPORT: "5432"
-      DBNAME: hl_module1
+      DBHOST: ${DBHOST:-hl12.zil}
+      DBPORT: ${DBPORT:-5433}
+      DBNAME: ${DBNAME:-hl6}
       SCHEMANAME: public
-      DB_USERNAME: postgres
-      DB_PASSWORD: postgres
+      DB_USERNAME: ${DB_USERNAME:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD:-postgres}
       SERVER_TOMCAT_MAX_THREADS: "200"
       SPRING_JPA_SHOW_SQL: "false"
     ports:
@@ -46,8 +45,6 @@ services:
     container_name: hl-module1-k6
     profiles: ["perf"]
     depends_on:
-      postgres:
-        condition: service_healthy
       app:
         condition: service_started
     working_dir: /scripts
