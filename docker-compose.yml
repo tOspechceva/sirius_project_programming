@@ -1,55 +1,24 @@
 services:
-  postgres:
-    image: postgres:16
-    container_name: hl-module1-postgres
-    restart: unless-stopped
-    profiles: ["local-db"]
-    environment:
-      POSTGRES_DB: hl_module1
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d hl_module1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   app:
-    image: 10.60.3.11:8888/tospe/hl-module1:lab6
+    # Образ приложения hl-module1 (при необходимости можно переопределить через DOCKER_IMAGE_APP)
+    image: ${DOCKER_IMAGE_APP:-10.60.3.11:8888/tospe/hl-module1:lab6}
     container_name: hl-module1-app
     restart: unless-stopped
-    depends_on: []
+    ports:
+      - "${APP_PUBLISH_PORT:-8082}:8081"
     environment:
+      SPRING_PROFILES_ACTIVE: docker
+      # Явный URL: Spring Boot отдает приоритет SPRING_DATASOURCE_URL над properties.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${DBHOST:-hl12.zil}:${DBPORT:-5433}/${DBNAME:-hl6}?currentSchema=${SCHEMANAME:-public}
       DBHOST: ${DBHOST:-hl12.zil}
       DBPORT: ${DBPORT:-5433}
       DBNAME: ${DBNAME:-hl6}
-      SCHEMANAME: public
-      DB_USERNAME: ${DB_USERNAME:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-hl_postgres}
-      SERVER_TOMCAT_MAX_THREADS: "200"
-      SPRING_JPA_SHOW_SQL: "false"
-    ports:
-      - "8082:8081"
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
-          memory: 1024M
-
-  k6:
-    image: grafana/k6:0.52.0
-    container_name: hl-module1-k6
-    profiles: ["perf"]
-    depends_on:
-      app:
-        condition: service_started
-    working_dir: /scripts
-    volumes:
-      - ./k6:/scripts
-
-volumes:
-  postgres_data:
+      SCHEMANAME: ${SCHEMANAME:-public}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-hl_postgres}
+      SERVER_TOMCAT_MAX_THREADS: ${SERVER_TOMCAT_MAX_THREADS:-200}
+      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL:-false}
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: ${SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL:-false}
+    # Ограничения ресурсов для обычного docker compose (без Swarm).
+    cpus: "${APP_CPU_LIMIT:-1.50}"
+    mem_limit: "${APP_MEMORY_LIMIT:-1536m}"
