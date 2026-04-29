@@ -72,6 +72,12 @@ def parse_args() -> argparse.Namespace:
         default="http://localhost:8082",
         help="base URL for API (default: http://localhost:8082)"
     )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=90,
+        help="HTTP timeout in seconds for each request (default: 90)"
+    )
     
     # Возвращаем распарсенные аргументы как объект с атрибутами
     return parser.parse_args()
@@ -80,7 +86,13 @@ def parse_args() -> argparse.Namespace:
 # ============================================================================
 #  УНИВЕРСАЛЬНЫЙ ОТПРАВИТЕЛЬ ЗАПРОСОВ С ОБРАБОТКОЙ ОШИБОК
 # ============================================================================
-def request_or_fail(session: requests.Session, method: str, url: str, **kwargs: Any) -> requests.Response:
+def request_or_fail(
+    session: requests.Session,
+    method: str,
+    url: str,
+    timeout_seconds: int,
+    **kwargs: Any,
+) -> requests.Response:
     """
     Отправляет HTTP-запрос и гарантированно останавливает скрипт при любой ошибке.
     
@@ -88,8 +100,9 @@ def request_or_fail(session: requests.Session, method: str, url: str, **kwargs: 
     которые могут привести к некорректным тестовым данным.
     """
     try:
-        # Выполняем запрос с таймаутом 15 секунд (защита от «вечных» зависаний)
-        response = session.request(method, url, timeout=15, **kwargs)
+        # Выполняем запрос с увеличенным таймаутом 90 секунд.
+        # Для /clear на заполненной БД 15 секунд может быть недостаточно.
+        response = session.request(method, url, timeout=timeout_seconds, **kwargs)
     except requests.RequestException as exc:
         # Сетевые ошибки: сервер недоступен, таймаут, неверный сертификат и т.п.
         # SystemExit — корректный способ завершить скрипт с кодом ошибки
@@ -107,7 +120,12 @@ def request_or_fail(session: requests.Session, method: str, url: str, **kwargs: 
 # ============================================================================
 # 📥 ПОЛУЧЕНИЕ СПИСКА СУЩНОСТЕЙ С ПРОВЕРКОЙ ФОРМАТА
 # ============================================================================
-def fetch_list(session: requests.Session, base_url: str, endpoint: str) -> list[dict[str, Any]]:
+def fetch_list(
+    session: requests.Session,
+    base_url: str,
+    endpoint: str,
+    timeout_seconds: int,
+) -> list[dict[str, Any]]:
     """
     Запрашивает список всех объектов эндпоинта и валидирует, что ответ — это массив.
     
@@ -115,7 +133,12 @@ def fetch_list(session: requests.Session, base_url: str, endpoint: str) -> list[
     в виде JSON-объекта {"error": "..."}, а не ожидаемый список [].
     """
     # Делаем GET-запрос к /api/{endpoint}
-    response = request_or_fail(session, "GET", f"{base_url}/api/{endpoint}")
+    response = request_or_fail(
+        session,
+        "GET",
+        f"{base_url}/api/{endpoint}",
+        timeout_seconds=timeout_seconds,
+    )
     # Парсим JSON-ответ
     data = response.json()
     
@@ -129,7 +152,13 @@ def fetch_list(session: requests.Session, base_url: str, endpoint: str) -> list[
 # ============================================================================
 # 🧹 ОЧИСТКА ДАННЫХ: ПОЛНАЯ ИЛИ ТОЧЕЧНАЯ
 # ============================================================================
-def clear_target(session: requests.Session, base_url: str, endpoint: str, object_id: int | None) -> None:
+def clear_target(
+    session: requests.Session,
+    base_url: str,
+    endpoint: str,
+    object_id: int | None,
+    timeout_seconds: int,
+) -> None:
     """
     Удаляет данные перед новой генерацией.
     
@@ -144,17 +173,27 @@ def clear_target(session: requests.Session, base_url: str, endpoint: str, object
             raise SystemExit("--id supports only users or lessons")
         
         # Отправляем DELETE /api/{endpoint}/{id}
-        request_or_fail(session, "DELETE", f"{base_url}/api/{endpoint}/{object_id}")
+        request_or_fail(
+            session,
+            "DELETE",
+            f"{base_url}/api/{endpoint}/{object_id}",
+            timeout_seconds=timeout_seconds,
+        )
         print(f"Deleted /api/{endpoint}/{object_id}")
         return  # Выходим, чтобы не выполнять полную очистку ниже
 
     # ── Режим 2: полная очистка коллекции ──
     # Предполагается, что на сервере есть специальный эндпоинт /clear для каждого ресурса
-    request_or_fail(session, "DELETE", f"{base_url}/api/{endpoint}/clear")
+    request_or_fail(
+        session,
+        "DELETE",
+        f"{base_url}/api/{endpoint}/clear",
+        timeout_seconds=timeout_seconds,
+    )
     print(f"Cleared /api/{endpoint}")
 
 
-def clear_all_targets(session: requests.Session, base_url: str) -> None:
+def clear_all_targets(session: requests.Session, base_url: str, timeout_seconds: int) -> None:
     """
     Полная очистка всех таблиц приложения одной функцией.
 
@@ -163,16 +202,37 @@ def clear_all_targets(session: requests.Session, base_url: str) -> None:
     2) users,
     3) lessons.
     """
-    request_or_fail(session, "DELETE", f"{base_url}/api/progress/clear")
-    request_or_fail(session, "DELETE", f"{base_url}/api/users/clear")
-    request_or_fail(session, "DELETE", f"{base_url}/api/lessons/clear")
+    request_or_fail(
+        session,
+        "DELETE",
+        f"{base_url}/api/progress/clear",
+        timeout_seconds=timeout_seconds,
+    )
+    request_or_fail(
+        session,
+        "DELETE",
+        f"{base_url}/api/users/clear",
+        timeout_seconds=timeout_seconds,
+    )
+    request_or_fail(
+        session,
+        "DELETE",
+        f"{base_url}/api/lessons/clear",
+        timeout_seconds=timeout_seconds,
+    )
     print("Cleared all targets: progress, users, lessons")
 
 
 # ============================================================================
 # 👥 ГЕНЕРАЦИЯ ПОЛЬЗОВАТЕЛЕЙ
 # ============================================================================
-def seed_users(session: requests.Session, base_url: str, count: int, faker: Faker) -> None:
+def seed_users(
+    session: requests.Session,
+    base_url: str,
+    count: int,
+    faker: Faker,
+    timeout_seconds: int,
+) -> None:
     """
     Создаёт N пользователей с гарантированно уникальными логинами и почтами.
     
@@ -190,7 +250,13 @@ def seed_users(session: requests.Session, base_url: str, count: int, faker: Fake
             "registrationDate": str(faker.date_between(start_date="-2y", end_date="today")),
         }
         # Отправляем POST-запрос на создание
-        request_or_fail(session, "POST", f"{base_url}/api/users", json=payload)
+        request_or_fail(
+            session,
+            "POST",
+            f"{base_url}/api/users",
+            timeout_seconds=timeout_seconds,
+            json=payload,
+        )
     
     # По завершении — отчёт в консоль
     print(f"Created users: {count}")
@@ -199,7 +265,13 @@ def seed_users(session: requests.Session, base_url: str, count: int, faker: Fake
 # ============================================================================
 # 📚 ГЕНЕРАЦИЯ УРОКОВ
 # ============================================================================
-def seed_lessons(session: requests.Session, base_url: str, count: int, faker: Faker) -> None:
+def seed_lessons(
+    session: requests.Session,
+    base_url: str,
+    count: int,
+    faker: Faker,
+    timeout_seconds: int,
+) -> None:
     """
     Создаёт N учебных материалов с правдоподобными параметрами.
     """
@@ -214,7 +286,13 @@ def seed_lessons(session: requests.Session, base_url: str, count: int, faker: Fa
             # maxTestScore: максимальный балл за тест (10–100)
             "maxTestScore": random.randint(10, 100),
         }
-        request_or_fail(session, "POST", f"{base_url}/api/lessons", json=payload)
+        request_or_fail(
+            session,
+            "POST",
+            f"{base_url}/api/lessons",
+            timeout_seconds=timeout_seconds,
+            json=payload,
+        )
     
     print(f"Created lessons: {count}")
 
@@ -223,7 +301,11 @@ def seed_lessons(session: requests.Session, base_url: str, count: int, faker: Fa
 #  ПОДГОТОВКА ЗАВИСИМОСТЕЙ ДЛЯ PROGRESS
 # ============================================================================
 def ensure_users_and_lessons(
-    session: requests.Session, base_url: str, count: int, faker: Faker
+    session: requests.Session,
+    base_url: str,
+    count: int,
+    faker: Faker,
+    timeout_seconds: int,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """
     Гарантирует, что в базе есть достаточно пользователей и уроков для генерации прогресса.
@@ -232,8 +314,8 @@ def ensure_users_and_lessons(
     Нельзя создать запись о прохождении, если самих сущностей не существует.
     """
     # Получаем текущие списки с сервера
-    users = fetch_list(session, base_url, "users")
-    lessons = fetch_list(session, base_url, "lessons")
+    users = fetch_list(session, base_url, "users", timeout_seconds)
+    lessons = fetch_list(session, base_url, "lessons", timeout_seconds)
 
     # В LAB5 важно не "раздувать" родительские таблицы без необходимости.
     # Поэтому users/lessons дозаполняем только если таблица полностью пустая.
@@ -243,12 +325,12 @@ def ensure_users_and_lessons(
     bootstrap_count = max(1, count // 2)
 
     if len(users) == 0:
-        seed_users(session, base_url, bootstrap_count, faker)
-        users = fetch_list(session, base_url, "users")
+        seed_users(session, base_url, bootstrap_count, faker, timeout_seconds)
+        users = fetch_list(session, base_url, "users", timeout_seconds)
 
     if len(lessons) == 0:
-        seed_lessons(session, base_url, bootstrap_count, faker)
-        lessons = fetch_list(session, base_url, "lessons")
+        seed_lessons(session, base_url, bootstrap_count, faker, timeout_seconds)
+        lessons = fetch_list(session, base_url, "lessons", timeout_seconds)
 
     # Возвращаем кортеж (список пользователей, список уроков) для дальнейшего использования
     return users, lessons
@@ -257,7 +339,13 @@ def ensure_users_and_lessons(
 # ============================================================================
 # 📊 ГЕНЕРАЦИЯ ПРОГРЕССА (связи многие-ко-многим)
 # ============================================================================
-def seed_progress(session: requests.Session, base_url: str, count: int, faker: Faker) -> None:
+def seed_progress(
+    session: requests.Session,
+    base_url: str,
+    count: int,
+    faker: Faker,
+    timeout_seconds: int,
+) -> None:
     """
     Создаёт записи о прохождении уроков пользователями.
     
@@ -267,7 +355,7 @@ def seed_progress(session: requests.Session, base_url: str, count: int, faker: F
     - Защита от бесконечного цикла при генерации уникальных пар
     """
     # Шаг 1: получаем зависимости. Если таблицы пустые — создаём по половине count.
-    users, lessons = ensure_users_and_lessons(session, base_url, count, faker)
+    users, lessons = ensure_users_and_lessons(session, base_url, count, faker, timeout_seconds)
 
     max_pairs = len(users) * len(lessons)
     if max_pairs == 0:
@@ -321,7 +409,13 @@ def seed_progress(session: requests.Session, base_url: str, count: int, faker: F
             payload["testResult"] = random.randint(0, int(lesson["maxTestScore"]))
 
         # Отправляем запрос на создание записи прогресса
-        request_or_fail(session, "POST", f"{base_url}/api/progress", json=payload)
+        request_or_fail(
+            session,
+            "POST",
+            f"{base_url}/api/progress",
+            timeout_seconds=timeout_seconds,
+            json=payload,
+        )
         created += 1
 
     print(f"Created progress rows: {created}")
@@ -357,10 +451,10 @@ def main() -> None:
             if args.endpoint == "all":
                 if args.id is not None:
                     raise SystemExit("--id is not supported with --endpoint all")
-                clear_all_targets(session, args.base_url)
+                clear_all_targets(session, args.base_url, args.timeout)
                 return
             else:
-                clear_target(session, args.base_url, args.endpoint, args.id)
+                clear_target(session, args.base_url, args.endpoint, args.id, args.timeout)
             # Если было точечное удаление (--id) — дальше ничего не делаем, выходим
             if args.id is not None:
                 return
@@ -376,12 +470,12 @@ def main() -> None:
             # Используйте: --endpoint all --clear
             raise SystemExit("Generation for --endpoint all is not supported. Use --endpoint all --clear")
         elif args.endpoint == "users":
-            seed_users(session, args.base_url, args.count, faker)
+            seed_users(session, args.base_url, args.count, faker, args.timeout)
         elif args.endpoint == "lessons":
-            seed_lessons(session, args.base_url, args.count, faker)
+            seed_lessons(session, args.base_url, args.count, faker, args.timeout)
         else:
             # Для progress сначала подготавливаем зависимости, потом генерируем связи
-            seed_progress(session, args.base_url, args.count, faker)
+            seed_progress(session, args.base_url, args.count, faker, args.timeout)
 
     # 7. Финальное сообщение об успешном завершении
     print("Done.")

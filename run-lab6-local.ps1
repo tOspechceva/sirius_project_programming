@@ -11,6 +11,7 @@ $SeedUsers = 200
 $SeedLessons = 150
 $SeedProgress = 400
 $SeedBaseUrl = "http://localhost:18080"
+$SeedTimeoutSeconds = 180
 
 $LocalResults = "k6/results/lab6_cpu_local"
 New-Item -ItemType Directory -Force -Path $LocalResults | Out-Null
@@ -24,25 +25,25 @@ function Reset-And-SeedData {
   )
 
   Write-Host "Reset DB via API..."
-  python "scripts/lab5_seed.py" --endpoint all --clear --base-url $BaseUrl
+  python "scripts/lab5_seed.py" --endpoint all --clear --base-url $BaseUrl --timeout $SeedTimeoutSeconds
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to clear data."
   }
 
   Write-Host "Seed users: $UsersCount"
-  python "scripts/lab5_seed.py" --endpoint users --count $UsersCount --base-url $BaseUrl
+  python "scripts/lab5_seed.py" --endpoint users --count $UsersCount --base-url $BaseUrl --timeout $SeedTimeoutSeconds
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to seed users."
   }
 
   Write-Host "Seed lessons: $LessonsCount"
-  python "scripts/lab5_seed.py" --endpoint lessons --count $LessonsCount --base-url $BaseUrl
+  python "scripts/lab5_seed.py" --endpoint lessons --count $LessonsCount --base-url $BaseUrl --timeout $SeedTimeoutSeconds
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to seed lessons."
   }
 
   Write-Host "Seed progress: $ProgressCount"
-  python "scripts/lab5_seed.py" --endpoint progress --count $ProgressCount --base-url $BaseUrl
+  python "scripts/lab5_seed.py" --endpoint progress --count $ProgressCount --base-url $BaseUrl --timeout $SeedTimeoutSeconds
   if ($LASTEXITCODE -ne 0) {
     throw "Failed to seed progress."
   }

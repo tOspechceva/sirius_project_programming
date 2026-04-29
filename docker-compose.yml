@@ -9,8 +9,8 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       # Явный URL: Spring Boot отдает приоритет SPRING_DATASOURCE_URL над properties.
-      SPRING_DATASOURCE_URL: jdbc:postgresql://${DBHOST:-192.168.1.184}:${DBPORT:-5433}/${DBNAME:-hl6}?currentSchema=${SCHEMANAME:-public}
-      DBHOST: ${DBHOST:-192.168.1.184}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${DBHOST:-hl12.zil}:${DBPORT:-5433}/${DBNAME:-hl6}?currentSchema=${SCHEMANAME:-public}
+      DBHOST: ${DBHOST:-hl12.zil}
       DBPORT: ${DBPORT:-5433}
       DBNAME: ${DBNAME:-hl6}
       SCHEMANAME: ${SCHEMANAME:-public}
@@ -22,3 +22,19 @@ services:
     # Ограничения ресурсов для обычного docker compose (без Swarm).
     cpus: "${APP_CPU_LIMIT:-1.50}"
     mem_limit: "${APP_MEMORY_LIMIT:-1536m}"
+
+  additional-service:
+    build:
+      context: ../additional-service
+      dockerfile: Dockerfile
+    container_name: hl-module1-additional-service
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "${ADDITIONAL_PUBLISH_PORT:-8083}:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      CRUD_BASE_URL: ${CRUD_BASE_URL:-http://app:8081}
+    cpus: "${ADDITIONAL_CPU_LIMIT:-1.00}"
+    mem_limit: "${ADDITIONAL_MEMORY_LIMIT:-1024m}"
