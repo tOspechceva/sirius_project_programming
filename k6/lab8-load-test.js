@@ -123,6 +123,23 @@ export function teardown(data) {
       `SNAPSHOT_DELTA usersCountDelta=${endUsers.count - data.startUsers.count} progressCountDelta=${endProgress.count - data.startProgress.count}`
     );
   }
+
+  // LAB9: сохранить снимок /api/observability с обоих сервисов в вывод прогона (tee в файл на стороне раннера).
+  const dumpObs = __ENV.DUMP_OBSERVABILITY === "1" || __ENV.DUMP_OBSERVABILITY === "true";
+  if (dumpObs) {
+    const crudObs = http.get(`${CRUD_BASE_URL}/api/observability`, {
+      timeout: httpTimeout,
+      tags: { phase: "teardown", target: "crud-observability" },
+    });
+    const addObs = http.get(`${ADDITIONAL_BASE_URL}/api/observability`, {
+      timeout: httpTimeout,
+      tags: { phase: "teardown", target: "additional-observability" },
+    });
+    const maxLen = Number(__ENV.OBS_DUMP_MAX_CHARS || 16000);
+    const clip = (s) => (s && s.length > maxLen ? s.substring(0, maxLen) + "...<truncated>" : s || "");
+    console.log(`OBSERVABILITY_CRUD status=${crudObs.status} body=${clip(String(crudObs.body))}`);
+    console.log(`OBSERVABILITY_ADDITIONAL status=${addObs.status} body=${clip(String(addObs.body))}`);
+  }
 }
 
 // -----------------------------

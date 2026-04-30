@@ -20,6 +20,8 @@ STEADY_DURATION="${STEADY_DURATION:-40s}"
 RAMP_DOWN="${RAMP_DOWN:-15s}"
 SLEEP_SECONDS="${SLEEP_SECONDS:-0.2}"
 HTTP_TIMEOUT="${HTTP_TIMEOUT:-120s}"
+DUMP_OBSERVABILITY="${DUMP_OBSERVABILITY:-0}"
+OBS_DUMP_MAX_CHARS="${OBS_DUMP_MAX_CHARS:-16000}"
 
 # Попытаемся взять имя docker-network из уже работающего контейнера app.
 APP_CONTAINER="${APP_CONTAINER:-hl-module1-app}"
@@ -32,6 +34,7 @@ SUMMARY_EXPORT_PATH="/scripts/results/${SUMMARY_FILE}"
 echo "Using docker network: $NETWORK_NAME"
 echo "Running k6 lab8 test: TARGET_VUS=$TARGET_VUS POST_POOL_RATIO=$POST_POOL_RATIO"
 echo "Snapshots will be printed in console."
+echo "DUMP_OBSERVABILITY=$DUMP_OBSERVABILITY (set 1 for LAB9 JSON lines at end)"
 
 docker run --rm \
   --network "$NETWORK_NAME" \
@@ -46,6 +49,8 @@ docker run --rm \
   -e RAMP_DOWN="$RAMP_DOWN" \
   -e SLEEP_SECONDS="$SLEEP_SECONDS" \
   -e HTTP_TIMEOUT="$HTTP_TIMEOUT" \
+  -e DUMP_OBSERVABILITY="$DUMP_OBSERVABILITY" \
+  -e OBS_DUMP_MAX_CHARS="$OBS_DUMP_MAX_CHARS" \
   grafana/k6:0.52.0 \
   run /scripts/lab8-load-test.js \
   --summary-export "$SUMMARY_EXPORT_PATH"
