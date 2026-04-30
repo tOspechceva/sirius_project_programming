@@ -19,14 +19,15 @@ services:
       SERVER_TOMCAT_MAX_THREADS: ${SERVER_TOMCAT_MAX_THREADS:-200}
       SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL:-false}
       SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: ${SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL:-false}
+      OBSERVABILITY_TICK_MS: ${OBSERVABILITY_TICK_MS:-1000}
+      OBSERVABILITY_LOG_ON_REFRESH: ${OBSERVABILITY_LOG_ON_REFRESH:-true}
+      OBSERVABILITY_LOG_EMPTY_SNAPSHOTS: ${OBSERVABILITY_LOG_EMPTY_SNAPSHOTS:-true}
     # Ограничения ресурсов для обычного docker compose (без Swarm).
     cpus: "${APP_CPU_LIMIT:-1.50}"
     mem_limit: "${APP_MEMORY_LIMIT:-1536m}"
 
   additional-service:
-    build:
-      context: ../additional-service
-      dockerfile: Dockerfile
+    image: ${DOCKER_IMAGE_ADDITIONAL:-10.60.3.11:8888/tospe/additional-service:ab8}
     container_name: hl-module1-additional-service
     restart: unless-stopped
     depends_on:
@@ -36,5 +37,9 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: docker
       CRUD_BASE_URL: ${CRUD_BASE_URL:-http://app:8081}
+      OBSERVABILITY_TICK_MS: ${OBSERVABILITY_TICK_MS:-1000}
+      OBSERVABILITY_LOG_ON_REFRESH: ${OBSERVABILITY_LOG_ON_REFRESH:-true}
+      OBSERVABILITY_LOG_EMPTY_SNAPSHOTS: ${OBSERVABILITY_LOG_EMPTY_SNAPSHOTS:-true}
     cpus: "${ADDITIONAL_CPU_LIMIT:-1.00}"
     mem_limit: "${ADDITIONAL_MEMORY_LIMIT:-1024m}"
+
