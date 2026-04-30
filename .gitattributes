@@ -1,0 +1,2 @@
+# Скрипты только с LF — иначе на Linux ssh/bash -lc ломается.
+*.sh text eol=lf
