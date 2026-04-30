@@ -9,8 +9,10 @@ import digital.zil.hl.module1.model.LessonProgress;
 import digital.zil.hl.module1.model.User;
 import digital.zil.hl.module1.repository.UserRepository;
 import digital.zil.hl.module1.service.CourseProgressService;
+import digital.zil.hl.module1.service.ObservabilityService;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -30,51 +32,58 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProgressController {
     private final CourseProgressService courseProgressService;
     private final UserRepository userRepository;
+    private final ObservabilityService observabilityService;
 
     public ProgressController(
             final CourseProgressService courseProgressService,
-            final UserRepository userRepository
+            final UserRepository userRepository,
+            final ObservabilityService observabilityService
     ) {
         this.courseProgressService = courseProgressService;
         this.userRepository = userRepository;
+        this.observabilityService = observabilityService;
     }
 
     @PostMapping
     public ResponseEntity<LessonProgressResponse> createOrReplaceProgress(
             @RequestBody final CompleteLessonRequest request
     ) {
-        final LessonProgress saved = courseProgressService.markLessonCompleted(
-                request.userId(),
-                request.lessonId(),
-                request.completionDate(),
-                request.testResult()
-        );
-        return ResponseEntity.status(HttpStatus.CREATED).body(toProgressResponse(saved));
+        return timed("controller:createOrReplaceProgress", () -> {
+            final LessonProgress saved = courseProgressService.markLessonCompleted(
+                    request.userId(),
+                    request.lessonId(),
+                    request.completionDate(),
+                    request.testResult()
+            );
+            return ResponseEntity.status(HttpStatus.CREATED).body(toProgressResponse(saved));
+        });
     }
 
     @PostMapping("/complete")
     public LessonProgressResponse completeLesson(@RequestBody final CompleteLessonRequest request) {
-        final LessonProgress saved = courseProgressService.markLessonCompleted(
-                request.userId(),
-                request.lessonId(),
-                request.completionDate(),
-                request.testResult()
-        );
-        return toProgressResponse(saved);
+        return timed("controller:completeLesson", () -> {
+            final LessonProgress saved = courseProgressService.markLessonCompleted(
+                    request.userId(),
+                    request.lessonId(),
+                    request.completionDate(),
+                    request.testResult()
+            );
+            return toProgressResponse(saved);
+        });
     }
 
     @GetMapping
     public List<LessonProgressResponse> getAllProgressEntries() {
-        return courseProgressService.getAllProgressEntries().stream()
+        return timed("controller:getAllProgressEntries", () -> courseProgressService.getAllProgressEntries().stream()
                 .map(ProgressController::toProgressResponse)
-                .toList();
+                .toList());
     }
 
     @GetMapping("/users/{userId}/lessons")
     public List<LessonProgressResponse> getUserProgressEntries(@PathVariable final long userId) {
-        return courseProgressService.getProgressEntriesByUser(userId).stream()
+        return timed("controller:getUserProgressEntries", () -> courseProgressService.getProgressEntriesByUser(userId).stream()
                 .map(ProgressController::toProgressResponse)
-                .toList();
+                .toList());
     }
 
     @GetMapping("/users/{userId}/lessons/{lessonId}")
@@ -82,11 +91,13 @@ public class ProgressController {
             @PathVariable final long userId,
             @PathVariable final long lessonId
     ) {
-        final LessonProgress progress = courseProgressService.getProgressEntry(userId, lessonId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Прогресс не найден для userId=" + userId + ", lessonId=" + lessonId
-                ));
-        return toProgressResponse(progress);
+        return timed("controller:getProgressEntry", () -> {
+            final LessonProgress progress = courseProgressService.getProgressEntry(userId, lessonId)
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Прогресс не найден для userId=" + userId + ", lessonId=" + lessonId
+                    ));
+            return toProgressResponse(progress);
+        });
     }
 
     @PutMapping("/users/{userId}/lessons/{lessonId}")
@@ -95,13 +106,15 @@ public class ProgressController {
             @PathVariable final long lessonId,
             @RequestBody final UpdateLessonProgressRequest request
     ) {
-        final LessonProgress updated = courseProgressService.markLessonCompleted(
-                userId,
-                lessonId,
-                request.completionDate(),
-                request.testResult()
-        );
-        return toProgressResponse(updated);
+        return timed("controller:updateProgressEntry", () -> {
+            final LessonProgress updated = courseProgressService.markLessonCompleted(
+                    userId,
+                    lessonId,
+                    request.completionDate(),
+                    request.testResult()
+            );
+            return toProgressResponse(updated);
+        });
     }
 
     @DeleteMapping("/users/{userId}/lessons/{lessonId}")
@@ -109,31 +122,51 @@ public class ProgressController {
             @PathVariable final long userId,
             @PathVariable final long lessonId
     ) {
-        courseProgressService.deleteProgressEntry(userId, lessonId);
-        return ResponseEntity.noContent().build();
+        return timed("controller:deleteProgressEntry", () -> {
+            courseProgressService.deleteProgressEntry(userId, lessonId);
+            return ResponseEntity.noContent().build();
+        });
     }
 
     @DeleteMapping("/clear")
     public ResponseEntity<Void> clearProgress() {
-        courseProgressService.deleteAllProgress();
-        return ResponseEntity.noContent().build();
+        return timed("controller:clearProgress", () -> {
+            courseProgressService.deleteAllProgress();
+            return ResponseEntity.noContent().build();
+        });
     }
 
     @GetMapping("/users/{userId}")
     public UserProgressResponse getUserProgress(@PathVariable final long userId) {
-        final User user = userRepository.findById(userId)
-                .map(ProgressController::toDomain)
-                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + userId));
-        final double progressPercent = courseProgressService.calculateUserProgressPercent(userId);
-        return toUserProgressResponse(user, progressPercent);
+        return timed("controller:getUserProgress", () -> {
+            final User user = userRepository.findById(userId)
+                    .map(ProgressController::toDomain)
+                    .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + userId));
+            final double progressPercent = courseProgressService.calculateUserProgressPercent(userId);
+            return toUserProgressResponse(user, progressPercent);
+        });
     }
 
     @GetMapping("/users")
     public List<UserProgressResponse> getAllUsersProgress() {
-        final Map<User, Double> allProgress = courseProgressService.calculateAllUsersProgressPercent();
-        return allProgress.entrySet().stream()
-                .map(entry -> toUserProgressResponse(entry.getKey(), entry.getValue()))
-                .toList();
+        return timed("controller:getAllUsersProgress", () -> {
+            final Map<User, Double> allProgress = courseProgressService.calculateAllUsersProgressPercent();
+            return allProgress.entrySet().stream()
+                    .map(entry -> toUserProgressResponse(entry.getKey(), entry.getValue()))
+                    .toList();
+        });
+    }
+
+    private <T> T timed(final String operation, final Supplier<T> supplier) {
+        final long started = System.nanoTime();
+        try {
+            final T result = supplier.get();
+            observabilityService.recordSuccess(operation, System.nanoTime() - started);
+            return result;
+        } catch (RuntimeException ex) {
+            observabilityService.recordFailure(operation, System.nanoTime() - started);
+            throw ex;
+        }
     }
 
     private static UserProgressResponse toUserProgressResponse(final User user, final double progressPercent) {

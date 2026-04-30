@@ -8,7 +8,9 @@ import digital.zil.hl.module1.model.Lesson;
 import digital.zil.hl.module1.model.LessonTest;
 import digital.zil.hl.module1.repository.LessonRepository;
 import digital.zil.hl.module1.service.CourseProgressService;
+import digital.zil.hl.module1.service.ObservabilityService;
 import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -28,40 +30,47 @@ import org.springframework.web.bind.annotation.RestController;
 public class LessonController {
     private final LessonRepository lessonRepository;
     private final CourseProgressService courseProgressService;
+    private final ObservabilityService observabilityService;
 
     public LessonController(
             final LessonRepository lessonRepository,
-            final CourseProgressService courseProgressService
+            final CourseProgressService courseProgressService,
+            final ObservabilityService observabilityService
     ) {
         this.lessonRepository = lessonRepository;
         this.courseProgressService = courseProgressService;
+        this.observabilityService = observabilityService;
     }
 
     @PostMapping
     public ResponseEntity<LessonResponse> createLesson(@RequestBody final CreateLessonRequest request) {
-        final LessonEntity entity = new LessonEntity();
-        entity.setTopic(request.topic());
-        entity.setVideoDurationMinutes(request.videoDurationMinutes());
-        entity.setTestName(request.testName());
-        entity.setMaxTestScore(request.maxTestScore());
-        final LessonEntity created = lessonRepository.save(entity);
-        return ResponseEntity.status(HttpStatus.CREATED).body(toLessonResponse(toDomain(created)));
+        return timed("controller:createLesson", () -> {
+            final LessonEntity entity = new LessonEntity();
+            entity.setTopic(request.topic());
+            entity.setVideoDurationMinutes(request.videoDurationMinutes());
+            entity.setTestName(request.testName());
+            entity.setMaxTestScore(request.maxTestScore());
+            final LessonEntity created = lessonRepository.save(entity);
+            return ResponseEntity.status(HttpStatus.CREATED).body(toLessonResponse(toDomain(created)));
+        });
     }
 
     @GetMapping
     public List<LessonResponse> getAllLessons() {
-        return lessonRepository.findAll().stream()
+        return timed("controller:getAllLessons", () -> lessonRepository.findAll().stream()
                 .map(LessonController::toDomain)
                 .map(LessonController::toLessonResponse)
-                .toList();
+                .toList());
     }
 
     @GetMapping("/{id}")
     public LessonResponse getLessonById(@PathVariable final long id) {
-        final Lesson lesson = lessonRepository.findById(id)
-                .map(LessonController::toDomain)
-                .orElseThrow(() -> new IllegalArgumentException("Урок не найден: " + id));
-        return toLessonResponse(lesson);
+        return timed("controller:getLessonById", () -> {
+            final Lesson lesson = lessonRepository.findById(id)
+                    .map(LessonController::toDomain)
+                    .orElseThrow(() -> new IllegalArgumentException("Урок не найден: " + id));
+            return toLessonResponse(lesson);
+        });
     }
 
     @PutMapping("/{id}")
@@ -69,33 +78,51 @@ public class LessonController {
             @PathVariable final long id,
             @RequestBody final UpdateLessonRequest request
     ) {
-        final LessonEntity updated = lessonRepository.findById(id)
-                .map(entity -> {
-                    entity.setTopic(request.topic());
-                    entity.setVideoDurationMinutes(request.videoDurationMinutes());
-                    entity.setTestName(request.testName());
-                    entity.setMaxTestScore(request.maxTestScore());
-                    return lessonRepository.save(entity);
-                })
-                .orElseThrow(() -> new IllegalArgumentException("Урок не найден: " + id));
-        return toLessonResponse(toDomain(updated));
+        return timed("controller:updateLesson", () -> {
+            final LessonEntity updated = lessonRepository.findById(id)
+                    .map(entity -> {
+                        entity.setTopic(request.topic());
+                        entity.setVideoDurationMinutes(request.videoDurationMinutes());
+                        entity.setTestName(request.testName());
+                        entity.setMaxTestScore(request.maxTestScore());
+                        return lessonRepository.save(entity);
+                    })
+                    .orElseThrow(() -> new IllegalArgumentException("Урок не найден: " + id));
+            return toLessonResponse(toDomain(updated));
+        });
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteLesson(@PathVariable final long id) {
-        courseProgressService.deleteAllProgressForLesson(id);
-        if (!lessonRepository.existsById(id)) {
-            throw new IllegalArgumentException("Урок не найден: " + id);
-        }
-        lessonRepository.deleteById(id);
-        return ResponseEntity.noContent().build();
+        return timed("controller:deleteLesson", () -> {
+            courseProgressService.deleteAllProgressForLesson(id);
+            if (!lessonRepository.existsById(id)) {
+                throw new IllegalArgumentException("Урок не найден: " + id);
+            }
+            lessonRepository.deleteById(id);
+            return ResponseEntity.noContent().build();
+        });
     }
 
     @DeleteMapping("/clear")
     public ResponseEntity<Void> clearLessons() {
-        lessonRepository.findAll().forEach(lesson -> courseProgressService.deleteAllProgressForLesson(lesson.getId()));
-        lessonRepository.deleteAll();
-        return ResponseEntity.noContent().build();
+        return timed("controller:clearLessons", () -> {
+            lessonRepository.findAll().forEach(lesson -> courseProgressService.deleteAllProgressForLesson(lesson.getId()));
+            lessonRepository.deleteAll();
+            return ResponseEntity.noContent().build();
+        });
+    }
+
+    private <T> T timed(final String operation, final Supplier<T> supplier) {
+        final long started = System.nanoTime();
+        try {
+            final T result = supplier.get();
+            observabilityService.recordSuccess(operation, System.nanoTime() - started);
+            return result;
+        } catch (RuntimeException ex) {
+            observabilityService.recordFailure(operation, System.nanoTime() - started);
+            throw ex;
+        }
     }
 
     private static Lesson toDomain(final LessonEntity entity) {

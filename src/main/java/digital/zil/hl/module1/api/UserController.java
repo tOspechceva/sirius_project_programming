@@ -7,7 +7,9 @@ import digital.zil.hl.module1.entity.UserEntity;
 import digital.zil.hl.module1.model.User;
 import digital.zil.hl.module1.repository.UserRepository;
 import digital.zil.hl.module1.service.CourseProgressService;
+import digital.zil.hl.module1.service.ObservabilityService;
 import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,39 +29,46 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
     private final UserRepository userRepository;
     private final CourseProgressService courseProgressService;
+    private final ObservabilityService observabilityService;
 
     public UserController(
             final UserRepository userRepository,
-            final CourseProgressService courseProgressService
+            final CourseProgressService courseProgressService,
+            final ObservabilityService observabilityService
     ) {
         this.userRepository = userRepository;
         this.courseProgressService = courseProgressService;
+        this.observabilityService = observabilityService;
     }
 
     @PostMapping
     public ResponseEntity<UserResponse> createUser(@RequestBody final CreateUserRequest request) {
-        final UserEntity entity = new UserEntity();
-        entity.setLogin(request.login());
-        entity.setEmail(request.email());
-        entity.setRegistrationDate(request.registrationDate());
-        final UserEntity created = userRepository.save(entity);
-        return ResponseEntity.status(HttpStatus.CREATED).body(toUserResponse(toDomain(created)));
+        return timed("controller:createUser", () -> {
+            final UserEntity entity = new UserEntity();
+            entity.setLogin(request.login());
+            entity.setEmail(request.email());
+            entity.setRegistrationDate(request.registrationDate());
+            final UserEntity created = userRepository.save(entity);
+            return ResponseEntity.status(HttpStatus.CREATED).body(toUserResponse(toDomain(created)));
+        });
     }
 
     @GetMapping
     public List<UserResponse> getAllUsers() {
-        return userRepository.findAll().stream()
+        return timed("controller:getAllUsers", () -> userRepository.findAll().stream()
                 .map(UserController::toDomain)
                 .map(UserController::toUserResponse)
-                .toList();
+                .toList());
     }
 
     @GetMapping("/{id}")
     public UserResponse getUserById(@PathVariable final long id) {
-        final User user = userRepository.findById(id)
-                .map(UserController::toDomain)
-                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + id));
-        return toUserResponse(user);
+        return timed("controller:getUserById", () -> {
+            final User user = userRepository.findById(id)
+                    .map(UserController::toDomain)
+                    .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + id));
+            return toUserResponse(user);
+        });
     }
 
     @PutMapping("/{id}")
@@ -67,32 +76,50 @@ public class UserController {
             @PathVariable final long id,
             @RequestBody final UpdateUserRequest request
     ) {
-        final UserEntity updated = userRepository.findById(id)
-                .map(entity -> {
-                    entity.setLogin(request.login());
-                    entity.setEmail(request.email());
-                    entity.setRegistrationDate(request.registrationDate());
-                    return userRepository.save(entity);
-                })
-                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + id));
-        return toUserResponse(toDomain(updated));
+        return timed("controller:updateUser", () -> {
+            final UserEntity updated = userRepository.findById(id)
+                    .map(entity -> {
+                        entity.setLogin(request.login());
+                        entity.setEmail(request.email());
+                        entity.setRegistrationDate(request.registrationDate());
+                        return userRepository.save(entity);
+                    })
+                    .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + id));
+            return toUserResponse(toDomain(updated));
+        });
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable final long id) {
-        courseProgressService.deleteAllProgressForUser(id);
-        if (!userRepository.existsById(id)) {
-            throw new IllegalArgumentException("Пользователь не найден: " + id);
-        }
-        userRepository.deleteById(id);
-        return ResponseEntity.noContent().build();
+        return timed("controller:deleteUser", () -> {
+            courseProgressService.deleteAllProgressForUser(id);
+            if (!userRepository.existsById(id)) {
+                throw new IllegalArgumentException("Пользователь не найден: " + id);
+            }
+            userRepository.deleteById(id);
+            return ResponseEntity.noContent().build();
+        });
     }
 
     @DeleteMapping("/clear")
     public ResponseEntity<Void> clearUsers() {
-        userRepository.findAll().forEach(user -> courseProgressService.deleteAllProgressForUser(user.getId()));
-        userRepository.deleteAll();
-        return ResponseEntity.noContent().build();
+        return timed("controller:clearUsers", () -> {
+            userRepository.findAll().forEach(user -> courseProgressService.deleteAllProgressForUser(user.getId()));
+            userRepository.deleteAll();
+            return ResponseEntity.noContent().build();
+        });
+    }
+
+    private <T> T timed(final String operation, final Supplier<T> supplier) {
+        final long started = System.nanoTime();
+        try {
+            final T result = supplier.get();
+            observabilityService.recordSuccess(operation, System.nanoTime() - started);
+            return result;
+        } catch (RuntimeException ex) {
+            observabilityService.recordFailure(operation, System.nanoTime() - started);
+            throw ex;
+        }
     }
 
     private static User toDomain(final UserEntity entity) {

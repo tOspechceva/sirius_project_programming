@@ -5,6 +5,7 @@ import digital.zil.hl.module1.repository.LessonRepository;
 import digital.zil.hl.module1.repository.UserRepository;
 import digital.zil.hl.module1.service.CompletionProgressCalculator;
 import digital.zil.hl.module1.service.CourseProgressService;
+import digital.zil.hl.module1.service.ObservabilityService;
 import digital.zil.hl.module1.service.ProgressCalculator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,13 +28,15 @@ public class ApplicationConfig {
             final UserRepository userRepository,
             final LessonRepository lessonRepository,
             final LessonProgressRepository lessonProgressRepository,
-            final ProgressCalculator progressCalculator
+            final ProgressCalculator progressCalculator,
+            final ObservabilityService observabilityService
     ) {
         return new CourseProgressService(
                 userRepository,
                 lessonRepository,
                 lessonProgressRepository,
-                progressCalculator
+                progressCalculator,
+                observabilityService
         );
     }
 }

@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Supplier;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -36,17 +37,20 @@ public class CourseProgressService {
     private final LessonRepository lessonRepository;
     private final LessonProgressRepository lessonProgressRepository;
     private final ProgressCalculator progressCalculator;
+    private final ObservabilityService observabilityService;
 
     public CourseProgressService(
             final UserRepository userRepository,
             final LessonRepository lessonRepository,
             final LessonProgressRepository lessonProgressRepository,
-            final ProgressCalculator progressCalculator
+            final ProgressCalculator progressCalculator,
+            final ObservabilityService observabilityService
     ) {
         this.userRepository = Objects.requireNonNull(userRepository);
         this.lessonRepository = Objects.requireNonNull(lessonRepository);
         this.lessonProgressRepository = Objects.requireNonNull(lessonProgressRepository);
         this.progressCalculator = Objects.requireNonNull(progressCalculator);
+        this.observabilityService = Objects.requireNonNull(observabilityService);
     }
 
     /**
@@ -73,13 +77,16 @@ public class CourseProgressService {
             final LocalDate completionDate,
             final int testResult
     ) {
-        final UserEntity user = userRepository.findById(userId)
+        final UserEntity user = timedDb("db:user.findById", () -> userRepository.findById(userId))
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + userId));
-        final LessonEntity lesson = lessonRepository.findById(lessonId)
+        final LessonEntity lesson = timedDb("db:lesson.findById", () -> lessonRepository.findById(lessonId))
                 .orElseThrow(() -> new IllegalArgumentException("Урок не найден: " + lessonId));
 
         validateCompletionData(user, lesson, completionDate, testResult);
-        final LessonProgressEntity progressEntity = lessonProgressRepository.findByUserIdAndLessonId(userId, lessonId)
+        final LessonProgressEntity progressEntity = timedDb(
+                "db:progress.findByUserIdAndLessonId",
+                () -> lessonProgressRepository.findByUserIdAndLessonId(userId, lessonId)
+        )
                 .orElseGet(() -> {
                     final LessonProgressEntity created = new LessonProgressEntity();
                     created.setUserId(userId);
@@ -88,7 +95,7 @@ public class CourseProgressService {
                 });
         progressEntity.setCompletionDate(completionDate);
         progressEntity.setTestResult(testResult);
-        final LessonProgressEntity saved = lessonProgressRepository.save(progressEntity);
+        final LessonProgressEntity saved = timedDb("db:progress.save", () -> lessonProgressRepository.save(progressEntity));
         return toDomain(saved);
     }
 
@@ -96,16 +103,19 @@ public class CourseProgressService {
      * Возвращает одну запись прогресса по связке пользователь-урок.
      */
     public Optional<LessonProgress> getProgressEntry(final long userId, final long lessonId) {
-        return lessonProgressRepository.findByUserIdAndLessonId(userId, lessonId).map(CourseProgressService::toDomain);
+        return timedDb(
+                "db:progress.findByUserIdAndLessonId",
+                () -> lessonProgressRepository.findByUserIdAndLessonId(userId, lessonId)
+        ).map(CourseProgressService::toDomain);
     }
 
     /**
      * Возвращает все записи прогресса конкретного пользователя.
      */
     public List<LessonProgress> getProgressEntriesByUser(final long userId) {
-        userRepository.findById(userId)
+        timedDb("db:user.findById", () -> userRepository.findById(userId))
                 .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + userId));
-        return lessonProgressRepository.findByUserId(userId).stream()
+        return timedDb("db:progress.findByUserId", () -> lessonProgressRepository.findByUserId(userId)).stream()
                 .map(CourseProgressService::toDomain)
                 .toList();
     }
@@ -114,7 +124,7 @@ public class CourseProgressService {
      * Возвращает все записи прогресса в системе.
      */
     public List<LessonProgress> getAllProgressEntries() {
-        return lessonProgressRepository.findAll().stream()
+        return timedDb("db:progress.findAll", lessonProgressRepository::findAll).stream()
                 .map(CourseProgressService::toDomain)
                 .toList();
     }
@@ -124,7 +134,10 @@ public class CourseProgressService {
      */
     @Transactional
     public void deleteProgressEntry(final long userId, final long lessonId) {
-        final long deleted = lessonProgressRepository.deleteByUserIdAndLessonId(userId, lessonId);
+        final long deleted = timedDb(
+                "db:progress.deleteByUserIdAndLessonId",
+                () -> lessonProgressRepository.deleteByUserIdAndLessonId(userId, lessonId)
+        );
         if (deleted == 0) {
             throw new IllegalArgumentException(
                     "Прогресс не найден для userId=" + userId + ", lessonId=" + lessonId
@@ -137,7 +150,7 @@ public class CourseProgressService {
      */
     @Transactional
     public int deleteAllProgressForUser(final long userId) {
-        return (int) lessonProgressRepository.deleteByUserId(userId);
+        return timedDb("db:progress.deleteByUserId", () -> (int) lessonProgressRepository.deleteByUserId(userId));
     }
 
     /**
@@ -145,7 +158,7 @@ public class CourseProgressService {
      */
     @Transactional
     public int deleteAllProgressForLesson(final long lessonId) {
-        return (int) lessonProgressRepository.deleteByLessonId(lessonId);
+        return timedDb("db:progress.deleteByLessonId", () -> (int) lessonProgressRepository.deleteByLessonId(lessonId));
     }
 
     /**
@@ -153,8 +166,8 @@ public class CourseProgressService {
      */
     @Transactional
     public int deleteAllProgress() {
-        final int total = lessonProgressRepository.findAll().size();
-        lessonProgressRepository.deleteAll();
+        final int total = timedDb("db:progress.findAll", () -> lessonProgressRepository.findAll().size());
+        timedDbVoid("db:progress.deleteAll", lessonProgressRepository::deleteAll);
         return total;
     }
 
@@ -168,14 +181,18 @@ public class CourseProgressService {
      * @return прогресс в процентах (0..100)
      */
     public double calculateUserProgressPercent(final long userId) {
-        userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + userId));
-
-        final List<LessonEntity> allLessons = lessonRepository.findAll();
-        final List<LessonProgress> userProgress = lessonProgressRepository.findByUserId(userId).stream()
-                .map(CourseProgressService::toDomain)
-                .toList();
-        return progressCalculator.calculatePercent(allLessons.size(), userProgress);
+        return timedCalc("calc:main:user-progress", () -> {
+            timedDb("db:user.findById", () -> userRepository.findById(userId))
+                    .orElseThrow(() -> new IllegalArgumentException("Пользователь не найден: " + userId));
+            final List<LessonEntity> allLessons = timedDb("db:lesson.findAll", lessonRepository::findAll);
+            final List<LessonProgress> userProgress = timedDb(
+                    "db:progress.findByUserId",
+                    () -> lessonProgressRepository.findByUserId(userId)
+            ).stream()
+                    .map(CourseProgressService::toDomain)
+                    .toList();
+            return progressCalculator.calculatePercent(allLessons.size(), userProgress);
+        });
     }
 
     /**
@@ -184,19 +201,57 @@ public class CourseProgressService {
      * @return карта "пользователь -> прогресс в процентах"
      */
     public Map<User, Double> calculateAllUsersProgressPercent() {
-        final List<UserEntity> users = userRepository.findAll();
-        final int allLessonsCount = lessonRepository.findAll().size();
+        return timedCalc("calc:main:all-users-progress", () -> {
+            final List<UserEntity> users = timedDb("db:user.findAll", userRepository::findAll);
+            final int allLessonsCount = timedDb("db:lesson.findAll", () -> lessonRepository.findAll().size());
+            final Map<User, Double> progressByUser = new LinkedHashMap<>();
+            for (final UserEntity user : users) {
+                final List<LessonProgress> userProgress = timedDb(
+                        "db:progress.findByUserId",
+                        () -> lessonProgressRepository.findByUserId(user.getId())
+                ).stream()
+                        .map(CourseProgressService::toDomain)
+                        .toList();
+                final double progressPercent = progressCalculator.calculatePercent(allLessonsCount, userProgress);
+                progressByUser.put(toDomain(user), progressPercent);
+            }
+            return progressByUser;
+        });
+    }
 
-        final Map<User, Double> progressByUser = new LinkedHashMap<>();
-        for (final UserEntity user : users) {
-            final List<LessonProgress> userProgress = lessonProgressRepository.findByUserId(user.getId()).stream()
-                    .map(CourseProgressService::toDomain)
-                    .toList();
-            final double progressPercent = progressCalculator.calculatePercent(allLessonsCount, userProgress);
-            progressByUser.put(toDomain(user), progressPercent);
+    private <T> T timedDb(final String operation, final Supplier<T> supplier) {
+        final long started = System.nanoTime();
+        try {
+            final T result = supplier.get();
+            observabilityService.recordSuccess(operation, System.nanoTime() - started);
+            return result;
+        } catch (RuntimeException ex) {
+            observabilityService.recordFailure(operation, System.nanoTime() - started);
+            throw ex;
         }
+    }
 
-        return progressByUser;
+    private void timedDbVoid(final String operation, final Runnable action) {
+        final long started = System.nanoTime();
+        try {
+            action.run();
+            observabilityService.recordSuccess(operation, System.nanoTime() - started);
+        } catch (RuntimeException ex) {
+            observabilityService.recordFailure(operation, System.nanoTime() - started);
+            throw ex;
+        }
+    }
+
+    private <T> T timedCalc(final String operation, final Supplier<T> supplier) {
+        final long started = System.nanoTime();
+        try {
+            final T result = supplier.get();
+            observabilityService.recordSuccess(operation, System.nanoTime() - started);
+            return result;
+        } catch (RuntimeException ex) {
+            observabilityService.recordFailure(operation, System.nanoTime() - started);
+            throw ex;
+        }
     }
 
     /**
