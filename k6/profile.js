@@ -5,7 +5,7 @@ export function readProfile() {
     const rampUp = __ENV.RAMP_UP || "20s";
     const steady = __ENV.STEADY_DURATION || "40s";
     const rampDown = __ENV.RAMP_DOWN || "15s";
-    const boundedPostRatio = Math.min(0.9, Math.max(0.1, postPoolRatio));
+    const boundedPostRatio = Math.min(0.95, Math.max(0.05, postPoolRatio));
     const postTargetVus = Math.max(0, Math.min(targetVus, Math.round(targetVus * boundedPostRatio)));
     const getTargetVus = targetVus - postTargetVus;
     const postStartVus = Math.max(0, Math.min(startVus, Math.round(startVus * boundedPostRatio)));

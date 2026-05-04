@@ -19,7 +19,8 @@ const rampDown = __ENV.RAMP_DOWN || "15s";
 const sleepSeconds = Number(__ENV.SLEEP_SECONDS || 0.2);
 const httpTimeout = __ENV.HTTP_TIMEOUT || "120s";
 
-const boundedPostRatio = Math.min(0.9, Math.max(0.1, postPoolRatio));
+// Доля VU на POST /api/users; остальное — GET /api/progress/users (допускаем 5% / 95% и симметрично).
+const boundedPostRatio = Math.min(0.95, Math.max(0.05, postPoolRatio));
 const postTargetVus = Math.max(0, Math.min(targetVus, Math.round(targetVus * boundedPostRatio)));
 const getTargetVus = targetVus - postTargetVus;
 
