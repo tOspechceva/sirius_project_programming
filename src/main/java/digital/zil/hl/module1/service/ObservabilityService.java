@@ -19,7 +19,7 @@ import org.springframework.stereotype.Service;
  * <p>
  * Окна задаются параметром {@code observability.windows} (например {@code 10s,30s,1m}).
  * Метод {@link #refresh()} вызывается по расписанию и пересчитывает снимки; при включённом логировании
- * пишет компактную сводку в лог приложения.
+ * пишет многострочную сводку по окнам и операциям в лог приложения.
  */
 @Service
 public class ObservabilityService {
@@ -92,7 +92,7 @@ public class ObservabilityService {
         if (!logEmptySnapshots && isSnapshotEmpty(computed)) {
             return;
         }
-        log.info("[{}] observability refresh: {}", applicationName, formatSnapshotForLog(computed));
+        log.info("[{}] observability refresh\n{}", applicationName, formatSnapshotReadable(computed));
     }
 
     private static boolean isSnapshotEmpty(final Map<String, Map<String, OperationStats>> snapshot) {
@@ -106,35 +106,31 @@ public class ObservabilityService {
         return true;
     }
 
-    private static String formatSnapshotForLog(final Map<String, Map<String, OperationStats>> snapshot) {
-        final StringBuilder sb = new StringBuilder(512);
+    /** Многострочный вывод для консоли: окна по порядку конфига, операции по имени. */
+    private static String formatSnapshotReadable(final Map<String, Map<String, OperationStats>> snapshot) {
+        final StringBuilder sb = new StringBuilder(1024);
         for (Map.Entry<String, Map<String, OperationStats>> w : snapshot.entrySet()) {
-            if (sb.length() > 0) {
-                sb.append(" | ");
-            }
-            sb.append(w.getKey()).append(":[");
+            sb.append("  window ").append(w.getKey()).append(":\n");
             final Map<String, OperationStats> ops = w.getValue();
             if (ops.isEmpty()) {
-                sb.append("empty");
-            } else {
-                boolean first = true;
-                for (Map.Entry<String, OperationStats> e : ops.entrySet()) {
-                    if (!first) {
-                        sb.append("; ");
-                    }
-                    first = false;
-                    final OperationStats s = e.getValue();
-                    sb.append(e.getKey())
-                            .append("{n=").append(s.count())
-                            .append(",err=").append(s.errors())
-                            .append(",avgMs=").append(String.format(java.util.Locale.ROOT, "%.2f", s.avgMs()))
-                            .append(",minMs=").append(String.format(java.util.Locale.ROOT, "%.2f", s.minMs()))
-                            .append(",maxMs=").append(String.format(java.util.Locale.ROOT, "%.2f", s.maxMs()))
-                            .append(",rps=").append(String.format(java.util.Locale.ROOT, "%.2f", s.rps()))
-                            .append('}');
-                }
+                sb.append("    (no events)\n");
+                continue;
             }
-            sb.append(']');
+            final List<Map.Entry<String, OperationStats>> sorted = new ArrayList<>(ops.entrySet());
+            sorted.sort(Map.Entry.comparingByKey());
+            for (Map.Entry<String, OperationStats> e : sorted) {
+                final OperationStats s = e.getValue();
+                sb.append(String.format(
+                        java.util.Locale.ROOT,
+                        "    %-52s  n=%5d  err=%3d  avg=%8.2f ms  min=%8.2f ms  max=%8.2f ms  rps=%6.2f%n",
+                        e.getKey(),
+                        s.count(),
+                        s.errors(),
+                        s.avgMs(),
+                        s.minMs(),
+                        s.maxMs(),
+                        s.rps()));
+            }
         }
         return sb.toString();
     }
