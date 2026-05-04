@@ -11,7 +11,9 @@
 #   export OUT_DIR="$HOME/lab8_matrix_results"
 #   export DUMP_OBSERVABILITY=0
 #   export K6_NO_THRESHOLDS=0   # по умолчанию 1 — иначе k6 выходит с ошибкой на пороге p95 и матрица обрывается
-#   export SEED_BETWEEN_RUNS=0   # по умолчанию 1 — перед каждым k6: hl06-seed-for-load-tests.sh (чистка+seed CRUD на hl06)
+#   export SEED_BETWEEN_RUNS=0   # по умолчанию 1 — перед каждым k6: hl06-seed-for-load-tests.sh (полный clear + seed на hl06)
+#   export HL06_CLEAR_TIMEOUT=900   # DELETE .../clear на большой БД (см. hl06-seed-for-load-tests.sh)
+#   export HL06_SEED_TIMEOUT=300    # таймаут POST при создании сущностей
 #   export SLEEP_AFTER_SEED_SEC=5
 set -euo pipefail
 
