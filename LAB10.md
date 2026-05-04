@@ -2,12 +2,12 @@
 
 ## Что сделано в коде (репозиторий `additional-service`)
 
-- Класс `UserCacheService`: хранилище `HashMap<Long, User>`, синхронизация одним замком, методы `getUserById`, `warmAll`.
+- Класс `UserCacheService`: хранилище `HashMap<Long, User>`, синхронизация одним замком; ленивая подгрузка `getUserById`, прогрев `preheatFromBulkUserSnapshot`.
 - Периодический лог: `@Scheduled(fixedDelayString = "${user-cache.stats-log-ms:60000}")` → строка вида  
   `[user-cache] size=… hits=… misses=…`.
 - Подключение в `AdditionalProgressService`:
   - расчёт по одному пользователю — без загрузки всего списка `/api/users`, данные через кеш / `GET /api/users/{id}`;
-  - расчёт по всем пользователям — после `GET /api/users` кеш обновляется (`warmAll`).
+  - расчёт по всем пользователям — после `GET /api/users` вызывается прогрев кеша (`preheatFromBulkUserSnapshot`).
 
 Параметры (env / `application.properties`):
 
