@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Запускать на hl11, если k6 установлен локально (без Docker).
 # Нужны lab8-load-test.js и каталог для summary.
+#
+# K6_NO_THRESHOLDS=1 — добавить k6 --no-thresholds (прогон не падает при превышении p95 в lab8-load-test.js).
 set -euo pipefail
 
 if ! command -v k6 >/dev/null 2>&1; then
@@ -27,7 +29,12 @@ if [[ ! -f "$SCRIPT" ]]; then
 fi
 
 cd "$K6_DIR"
-k6 run "$SCRIPT" \
+K6_EXTRA=()
+if [[ "${K6_NO_THRESHOLDS:-0}" == "1" || "${K6_NO_THRESHOLDS:-}" == "true" ]]; then
+  K6_EXTRA+=(--no-thresholds)
+fi
+
+k6 run "${K6_EXTRA[@]}" "$SCRIPT" \
   --summary-export "$SUMMARY_EXPORT_PATH" \
   -e CRUD_BASE_URL="$CRUD_BASE_URL" \
   -e ADDITIONAL_BASE_URL="$ADDITIONAL_BASE_URL" \

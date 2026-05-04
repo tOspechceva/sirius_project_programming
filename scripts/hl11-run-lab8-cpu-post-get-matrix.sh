@@ -10,6 +10,9 @@
 #   export STEADY_DURATION=60s
 #   export OUT_DIR="$HOME/lab8_matrix_results"
 #   export DUMP_OBSERVABILITY=0
+#   export K6_NO_THRESHOLDS=0   # по умолчанию 1 — иначе k6 выходит с ошибкой на пороге p95 и матрица обрывается
+#   export SEED_BETWEEN_RUNS=0   # по умолчанию 1 — перед каждым k6: hl06-seed-for-load-tests.sh (чистка+seed CRUD на hl06)
+#   export SLEEP_AFTER_SEED_SEC=5
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,6 +20,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 SET_CPU="${REPO_ROOT}/scripts/hl06-docker-set-cpus.sh"
 K6_DIRECT="${REPO_ROOT}/scripts/hl11-run-lab8-k6-direct.sh"
+SEED_REMOTE="${REPO_ROOT}/scripts/hl06-seed-for-load-tests.sh"
 
 if [[ ! -f "$SET_CPU" ]]; then
   echo "Не найден $SET_CPU" >&2
@@ -42,6 +46,11 @@ export RAMP_DOWN="${RAMP_DOWN:-15s}"
 export SLEEP_SECONDS="${SLEEP_SECONDS:-0.2}"
 export HTTP_TIMEOUT="${HTTP_TIMEOUT:-300s}"
 export DUMP_OBSERVABILITY="${DUMP_OBSERVABILITY:-0}"
+# Иначе первый же прогон при медленном p(95) завершает k6 с кодом 99 и цикл матрицы обрывается (set -e + pipefail в direct).
+export K6_NO_THRESHOLDS="${K6_NO_THRESHOLDS:-1}"
+
+SEED_BETWEEN_RUNS="${SEED_BETWEEN_RUNS:-1}"
+SLEEP_AFTER_SEED_SEC="${SLEEP_AFTER_SEED_SEC:-5}"
 
 OUT_DIR="${OUT_DIR:-$HOME/lab8_cpu_post_get_matrix}"
 mkdir -p "$OUT_DIR"
@@ -51,6 +60,20 @@ RATIOS=(0.05 0.5 0.95)
 
 echo "OUT_DIR=$OUT_DIR"
 echo "TARGET_VUS=$TARGET_VUS POST ratios: ${RATIOS[*]} CPUs: ${CPUS[*]}"
+echo "K6_NO_THRESHOLDS=$K6_NO_THRESHOLDS SEED_BETWEEN_RUNS=$SEED_BETWEEN_RUNS"
+
+run_seed() {
+  if [[ "$SEED_BETWEEN_RUNS" != "1" && "$SEED_BETWEEN_RUNS" != "true" ]]; then
+    return 0
+  fi
+  if [[ ! -f "$SEED_REMOTE" ]]; then
+    echo "Пропуск seed: нет $SEED_REMOTE" >&2
+    return 0
+  fi
+  echo "--- hl06: clear + seed (CRUD / hl-module1-app), затем пауза ${SLEEP_AFTER_SEED_SEC}s ---"
+  bash "$SEED_REMOTE"
+  sleep "$SLEEP_AFTER_SEED_SEC"
+}
 
 for cpu in "${CPUS[@]}"; do
   echo "======== CPU $cpu (hl06 docker update) ========"
@@ -62,6 +85,7 @@ for cpu in "${CPUS[@]}"; do
     export POST_POOL_RATIO="$ratio"
     export SUMMARY_EXPORT_PATH="${OUT_DIR}/summary-cpu${cpu}-r${safe_ratio}-vus${TARGET_VUS}-${ts}.json"
     echo ">>> POST_POOL_RATIO=$ratio -> $SUMMARY_EXPORT_PATH"
+    run_seed
     bash "$K6_DIRECT"
   done
 done
