@@ -119,38 +119,11 @@
 
 Особенно важно, что `s2s:crud:*` позволяет явно видеть сетевую цену походов из additional в main.
 
----
-
-### 6) Что мы сделали для демонстрации «плохой логики» (N+1)
-
-Это отдельная часть для лабораторного эксперимента.
-
-Добавили новый endpoint:
-
-- `GET /api/progress/n-plus-one` в `AdditionalProgressController`.
-
-Его бизнес-логика в `AdditionalProgressService.calculateProgressWithNPlusOneLookups()`:
-
-1. Берем список прогресса (`GET /api/progress`).
-2. Для **каждой** записи:
-   - отдельно вызываем `GET /api/users/{id}`;
-   - отдельно вызываем `GET /api/lessons/{id}`.
-3. Формируем ответ через `NPlusOneProgressResponse`.
-
-Это намеренно неэффективно: при росте количества записей количество S2S-вызовов растет линейно и быстро становится дорогим.
-
-Чтобы это работало, в `CrudApiClient` добавлены методы:
-
-- `getUserByIdBody(long userId)` -> `GET /api/users/{id}`;
-- `getLessonByIdBody(long lessonId)` -> `GET /api/lessons/{id}`.
-
-И добавлен DTO:
-
-- `NPlusOneProgressResponse` (данные пользователя + урока + прогресса в одной строке ответа).
+Для точечной загрузки пользователя в `CrudApiClient` остаётся `getUserByIdBody` (`GET /api/users/{id}`) — он используется в LAB10 (`UserCacheService`).
 
 ---
 
-### 7) Что делают скрипты, которые мы написали для LAB9
+### 6) Что делают скрипты, которые мы написали для LAB9
 
 - `scripts/hl06-seed-for-load-tests.sh`  
   Удаленно на hl06 делает clear + seed (`users`, `lessons`, `progress`) перед каждым прогоном.
