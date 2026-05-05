@@ -78,7 +78,7 @@ public class KafkaCommandProcessor {
         entity.setEmail(request.email());
         entity.setRegistrationDate(request.registrationDate());
         userRepository.save(entity);  // Сохранение в БД
-        LOG.info("Kafka: created user login={}", request.login());  // Лог успеха
+        LOG.debug("Kafka: created user login={}", request.login());  // Лог успеха
     }
 
     // Удаление пользователя по ID
@@ -89,7 +89,7 @@ public class KafkaCommandProcessor {
             throw new IllegalArgumentException("Пользователь не найден: " + id);  // Ошибка, если не найден
         }
         userRepository.deleteById(id);  // Удаление из БД
-        LOG.info("Kafka: deleted user id={}", id);  // Лог успеха
+        LOG.debug("Kafka: deleted user id={}", id);  // Лог успеха
     }
 
     // Обработчик команд для сущности Lesson
@@ -109,7 +109,7 @@ public class KafkaCommandProcessor {
         entity.setTestName(request.testName());
         entity.setMaxTestScore(request.maxTestScore());
         lessonRepository.save(entity);  // Сохранение в БД
-        LOG.info("Kafka: created lesson topic={}", request.topic());  // Лог успеха
+        LOG.debug("Kafka: created lesson topic={}", request.topic());  // Лог успеха
     }
 
     // Удаление урока по ID
@@ -120,7 +120,7 @@ public class KafkaCommandProcessor {
             throw new IllegalArgumentException("Урок не найден: " + id);  // Ошибка
         }
         lessonRepository.deleteById(id);  // Удаление из БД
-        LOG.info("Kafka: deleted lesson id={}", id);  // Лог успеха
+        LOG.debug("Kafka: deleted lesson id={}", id);  // Лог успеха
     }
 
     // Обработчик команд для сущности Progress
@@ -140,7 +140,7 @@ public class KafkaCommandProcessor {
                 request.completionDate(),
                 request.testResult()
         );
-        LOG.info("Kafka: upsert progress userId={} lessonId={}", request.userId(), request.lessonId());  // Лог
+        LOG.debug("Kafka: upsert progress userId={} lessonId={}", request.userId(), request.lessonId());  // Лог
     }
 
     // Удаление записи о прогрессе
@@ -148,7 +148,7 @@ public class KafkaCommandProcessor {
         final long userId = readRequiredLong(payload, "userId");  // Извлечение userId
         final long lessonId = readRequiredLong(payload, "lessonId");  // Извлечение lessonId
         courseProgressService.deleteProgressEntry(userId, lessonId);  // Вызов сервиса удаления
-        LOG.info("Kafka: deleted progress userId={} lessonId={}", userId, lessonId);  // Лог
+        LOG.debug("Kafka: deleted progress userId={} lessonId={}", userId, lessonId);  // Лог
     }
 
     // Вспомогательный метод: безопасное извлечение обязательного long-поля из JSON
