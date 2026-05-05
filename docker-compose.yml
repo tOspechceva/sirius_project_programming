@@ -1,55 +1,56 @@
-services:
-  app:
+services:  # Начало определения сервисов Docker Compose
+
+  app:  # Объявление основного сервиса приложения
     # Образ приложения hl-module1 (при необходимости можно переопределить через DOCKER_IMAGE_APP)
-    image: ${DOCKER_IMAGE_APP:-10.60.3.11:8888/tospe/hl-module1:lab6}
-    container_name: hl-module1-app
-    restart: unless-stopped
-    ports:
-      - "${APP_PUBLISH_PORT:-8082}:8081"
-    extra_hosts:
-      - "hl15.zil:10.60.3.13"
-      - "hl14.zil:10.60.3.12"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
+    image: ${DOCKER_IMAGE_APP:-10.60.3.11:8888/tospe/hl-module1:lab6}  # Образ контейнера: используется переменная или значение по умолчанию из приватного реестра
+    container_name: hl-module1-app  # Фиксированное имя контейнера в Docker (иначе будет сгенерировано автоматически)
+    restart: unless-stopped  # Политика перезапуска: автоматический рестарт при падении, кроме ручной остановки
+    ports:  # Секция проброса портов <порт_хоста>:<порт_контейнера>
+      - "${APP_PUBLISH_PORT:-8082}:8081"  # Порт хоста (настраивается) -> порт 8081 внутри контейнера
+    extra_hosts:  # Добавление записей в /etc/hosts контейнера для разрешения имён во внешние IP
+      - "hl15.zil:10.60.3.13"  # Маппинг имени узла hl15.zil на IP 10.60.3.13 (например, брокер Kafka)
+      - "hl14.zil:10.60.3.12"  # Маппинг имени узла hl14.zil на IP 10.60.3.12 (например, брокер Kafka)
+    environment:  # Переменные окружения, передаваемые в контейнер
+      SPRING_PROFILES_ACTIVE: docker  # Активация Spring-профиля "docker" для загрузки application-docker.yml
       # Явный URL: Spring Boot отдает приоритет SPRING_DATASOURCE_URL над properties.
-      SPRING_DATASOURCE_URL: jdbc:postgresql://${DBHOST:-hl12.zil}:${DBPORT:-5433}/${DBNAME:-hl6}?currentSchema=${SCHEMANAME:-public}
-      DBHOST: ${DBHOST:-hl12.zil}
-      DBPORT: ${DBPORT:-5433}
-      DBNAME: ${DBNAME:-hl6}
-      SCHEMANAME: ${SCHEMANAME:-public}
-      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-hl_postgres}
-      SERVER_TOMCAT_MAX_THREADS: ${SERVER_TOMCAT_MAX_THREADS:-200}
-      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL:-false}
-      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: ${SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL:-false}
-      OBSERVABILITY_TICK_MS: ${OBSERVABILITY_TICK_MS:-1000}
-      OBSERVABILITY_LOG_ON_REFRESH: ${OBSERVABILITY_LOG_ON_REFRESH:-true}
-      OBSERVABILITY_LOG_EMPTY_SNAPSHOTS: ${OBSERVABILITY_LOG_EMPTY_SNAPSHOTS:-true}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:-10.60.3.13:9094,10.60.3.12:9094}
-      SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-true}
-      SPRING_KAFKA_LISTENER_CONCURRENCY: ${SPRING_KAFKA_LISTENER_CONCURRENCY:-2}
-      APP_KAFKA_TOPIC_COMMANDS: ${APP_KAFKA_TOPIC_COMMANDS:-hl06}
-      SPRING_KAFKA_CONSUMER_GROUP_ID: ${SPRING_KAFKA_CONSUMER_GROUP_ID:-hl-module1-commands}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${DBHOST:-hl12.zil}:${DBPORT:-5433}/${DBNAME:-hl6}?currentSchema=${SCHEMANAME:-public}  # JDBC-URL подключения к PostgreSQL с параметризованными значениями
+      DBHOST: ${DBHOST:-hl12.zil}  # Хост БД (передаётся как отдельная переменная окружения)
+      DBPORT: ${DBPORT:-5433}  # Порт БД (передаётся как отдельная переменная окружения)
+      DBNAME: ${DBNAME:-hl6}  # Имя базы данных (передаётся как отдельная переменная окружения)
+      SCHEMANAME: ${SCHEMANAME:-public}  # Имя схемы PostgreSQL (передаётся как отдельная переменная окружения)
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-postgres}  # Пользователь БД (по умолчанию: postgres)
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-hl_postgres}  # Пароль БД (по умолчанию: hl_postgres) ⚠️ для prod использовать secrets
+      SERVER_TOMCAT_MAX_THREADS: ${SERVER_TOMCAT_MAX_THREADS:-200}  # Макс. количество потоков встроенного Tomcat для обработки запросов
+      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL:-false}  # Логирование SQL-запросов Hibernate (false = выключено)
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: ${SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL:-false}  # Форматирование SQL в логах (false = выключено)
+      OBSERVABILITY_TICK_MS: ${OBSERVABILITY_TICK_MS:-1000}  # Интервал сбора метрик observability в миллисекундах
+      OBSERVABILITY_LOG_ON_REFRESH: ${OBSERVABILITY_LOG_ON_REFRESH:-true}  # Логировать снапшоты метрик при обновлении
+      OBSERVABILITY_LOG_EMPTY_SNAPSHOTS: ${OBSERVABILITY_LOG_EMPTY_SNAPSHOTS:-true}  # Логировать даже пустые снапшоты метрик
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:-10.60.3.13:9094,10.60.3.12:9094}  # Адреса брокеров Kafka для подключения (список через запятую)
+      SPRING_KAFKA_LISTENER_AUTO_STARTUP: ${SPRING_KAFKA_LISTENER_AUTO_STARTUP:-true}  # Автозапуск Kafka-слушателей при старте приложения
+      SPRING_KAFKA_LISTENER_CONCURRENCY: ${SPRING_KAFKA_LISTENER_CONCURRENCY:-2}  # Количество параллельных консьюмеров на топик
+      SPRING_KAFKA_CONSUMER_MAX_POLL_RECORDS: ${SPRING_KAFKA_CONSUMER_MAX_POLL_RECORDS:-100}  # Размер пакета сообщений при batch-listener
+      APP_KAFKA_TOPIC_COMMANDS: ${APP_KAFKA_TOPIC_COMMANDS:-hl06}  # Имя Kafka-топика для команд приложения
+      SPRING_KAFKA_CONSUMER_GROUP_ID: ${SPRING_KAFKA_CONSUMER_GROUP_ID:-hl-module1-commands}  # ID группы потребителей Kafka (для отслеживания offsets)
     # Ограничения ресурсов для обычного docker compose (без Swarm).
-    cpus: "${APP_CPU_LIMIT:-1.50}"
-    mem_limit: "${APP_MEMORY_LIMIT:-1536m}"
+    cpus: "${APP_CPU_LIMIT:-1.50}"  # Лимит CPU: максимум 1.5 ядра (настраивается через переменную)
+    mem_limit: "${APP_MEMORY_LIMIT:-1536m}"  # Лимит памяти: максимум 1536 МБ (настраивается через переменную)
 
-  additional-service:
-    image: ${DOCKER_IMAGE_ADDITIONAL:-10.60.3.11:8888/tospe/additional-service:ab8}
-    container_name: hl-module1-additional-service
-    restart: unless-stopped
-    depends_on:
-      - app
-    ports:
-      - "${ADDITIONAL_PUBLISH_PORT:-8083}:8082"
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      CRUD_BASE_URL: ${CRUD_BASE_URL:-http://app:8081}
-      OBSERVABILITY_TICK_MS: ${OBSERVABILITY_TICK_MS:-1000}
-      OBSERVABILITY_LOG_ON_REFRESH: ${OBSERVABILITY_LOG_ON_REFRESH:-true}
-      OBSERVABILITY_LOG_EMPTY_SNAPSHOTS: ${OBSERVABILITY_LOG_EMPTY_SNAPSHOTS:-true}
-      USER_CACHE_STATS_LOG_MS: ${USER_CACHE_STATS_LOG_MS:-60000}
-      USER_CACHE_STATS_LOG_ENABLED: ${USER_CACHE_STATS_LOG_ENABLED:-true}
-    cpus: "${ADDITIONAL_CPU_LIMIT:-1.00}"
-    mem_limit: "${ADDITIONAL_MEMORY_LIMIT:-1024m}"
-
+  additional-service:  # Объявление вспомогательного сервиса
+    image: ${DOCKER_IMAGE_ADDITIONAL:-10.60.3.11:8888/tospe/additional-service:ab8}  # Образ сервиса из приватного реестра (версия ab8)
+    container_name: hl-module1-additional-service  # Фиксированное имя контейнера
+    restart: unless-stopped  # Политика перезапуска: аналогично основному сервису
+    depends_on:  # Зависимости: этот сервис запускается после...
+      - app  # ...сервиса "app" (важно: ждёт старта контейнера, а не готовности приложения)
+    ports:  # Секция проброса портов
+      - "${ADDITIONAL_PUBLISH_PORT:-8083}:8082"  # Порт хоста (настраивается) -> порт 8082 внутри контейнера
+    environment:  # Переменные окружения для additional-service
+      SPRING_PROFILES_ACTIVE: docker  # Активация Spring-профиля "docker"
+      CRUD_BASE_URL: ${CRUD_BASE_URL:-http://app:8081}  # Базовый URL для вызовов к сервису "app" (использует Docker DNS)
+      OBSERVABILITY_TICK_MS: ${OBSERVABILITY_TICK_MS:-1000}  # Интервал сбора метрик (единый стандарт с app)
+      OBSERVABILITY_LOG_ON_REFRESH: ${OBSERVABILITY_LOG_ON_REFRESH:-true}  # Логирование при обновлении метрик
+      OBSERVABILITY_LOG_EMPTY_SNAPSHOTS: ${OBSERVABILITY_LOG_EMPTY_SNAPSHOTS:-true}  # Логирование пустых снапшотов
+      USER_CACHE_STATS_LOG_MS: ${USER_CACHE_STATS_LOG_MS:-60000}  # Интервал логирования статистики кэша пользователей (60 сек)
+      USER_CACHE_STATS_LOG_ENABLED: ${USER_CACHE_STATS_LOG_ENABLED:-true}  # Включение/выключение логирования статистики кэша
+    cpus: "${ADDITIONAL_CPU_LIMIT:-1.00}"  # Лимит CPU для этого сервиса: максимум 1.0 ядро
+    mem_limit: "${ADDITIONAL_MEMORY_LIMIT:-1024m}"  # Лимит памяти для этого сервиса: максимум 1024 МБ

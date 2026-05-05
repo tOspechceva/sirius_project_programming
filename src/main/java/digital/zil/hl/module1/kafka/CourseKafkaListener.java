@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
+import java.util.List;
 
 /**
  * Потребитель команд из Kafka (основное приложение, LAB12).
@@ -27,8 +28,10 @@ public class CourseKafkaListener {
             groupId = "${spring.kafka.consumer.group-id}",
             concurrency = "${spring.kafka.listener.concurrency}"
     )
-    public void onCommand(final String value) {
-        LOG.debug("Kafka message received");
-        kafkaCommandProcessor.handle(value);
+    public void onCommandBatch(final List<String> values) {
+        LOG.debug("Kafka batch received, size={}", values.size());
+        for (final String value : values) {
+            kafkaCommandProcessor.handle(value);
+        }
     }
 }

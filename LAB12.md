@@ -4,7 +4,7 @@
 
 ## Что сделано в коде
 
-- Зависимость **`spring-boot-starter-kafka`**, **`@EnableKafka`** в `Module1Application`.
+- Зависимость **`org.springframework.kafka:spring-kafka`**, **`@EnableKafka`** в `Module1Application`.
 - Контракт сообщения: `KafkaCommandEnvelope` — поля **`entity`**, **`operation`**, **`payload`** (JSON-объект).
   - **`entity`**: `USER` | `LESSON` | `PROGRESS`
   - **`operation`**: `POST` | `DEL`

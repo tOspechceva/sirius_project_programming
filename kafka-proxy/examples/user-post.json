@@ -1,0 +1,1 @@
+{"entity":"USER","operation":"POST","payload":{"login":"k6_proxy_user","email":"k6_proxy_user@example.com","registrationDate":"2024-06-01"}}

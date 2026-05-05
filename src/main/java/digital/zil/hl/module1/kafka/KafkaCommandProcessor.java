@@ -17,15 +17,17 @@ import org.springframework.stereotype.Service;
 /**
  * Разбор JSON-команд из Kafka и вызов соответствующих сервисов/репозиториев.
  */
-@Service
+@Service  // Делает класс управляемым Spring-контейнером (автосканирование, внедрение зависимостей)
 public class KafkaCommandProcessor {
-    private static final Logger LOG = LoggerFactory.getLogger(KafkaCommandProcessor.class);
+    private static final Logger LOG = LoggerFactory.getLogger(KafkaCommandProcessor.class);  // Логгер для вывода информации и ошибок
 
-    private final ObjectMapper objectMapper;
-    private final UserRepository userRepository;
-    private final LessonRepository lessonRepository;
-    private final CourseProgressService courseProgressService;
+    // Зависимости, внедряемые через конструктор (лучшая практика: final + immutable)
+    private final ObjectMapper objectMapper;  // JSON ↔ Java Object (десериализация сообщений)
+    private final UserRepository userRepository;  // Репозиторий для работы с пользователями
+    private final LessonRepository lessonRepository;  // Репозиторий для работы с уроками
+    private final CourseProgressService courseProgressService;  // Сервис для логики прогресса обучения
 
+    // Конструктор с явной инъекцией зависимостей (защита от null, удобно для тестов)
     public KafkaCommandProcessor(
             final ObjectMapper objectMapper,
             final UserRepository userRepository,
@@ -39,110 +41,121 @@ public class KafkaCommandProcessor {
     }
 
     /**
-     * Обрабатывает сырое тело сообщения. При ошибке логирует и не пробрасывает
-     * (чтобы не зациклить consumer на «ядовом» сообщении в учебном сценарии).
+     * Точка входа: обработка сырого JSON из Kafka
+     * Ошибки логируются, но не пробрасываются — чтобы потребитель не зацикливался на «битом» сообщении
      */
-    public void handle(final String json) {
+    public void handle(final String json) {  // Принимает тело сообщения как строку
         try {
-            final KafkaCommandEnvelope envelope = objectMapper.readValue(json, KafkaCommandEnvelope.class);
-            dispatch(envelope);
+            final KafkaCommandEnvelope envelope = objectMapper.readValue(json, KafkaCommandEnvelope.class);  // Парсит JSON в обёртку-команду
+            dispatch(envelope);  // Делегирует обработку по типу сущности
         } catch (final Exception ex) {
-            LOG.error("Kafka command failed, body={}", json, ex);
+            LOG.error("Kafka command failed, body={}", json, ex);  // Логирует ошибку с телом сообщения для отладки
         }
     }
 
+    // Маршрутизатор: выбирает обработчик по типу сущности (USER/LESSON/PROGRESS)
     private void dispatch(final KafkaCommandEnvelope envelope) {
-        switch (envelope.entity()) {
-            case USER -> handleUser(envelope.operation(), envelope.payload());
-            case LESSON -> handleLesson(envelope.operation(), envelope.payload());
-            case PROGRESS -> handleProgress(envelope.operation(), envelope.payload());
+        switch (envelope.entity()) {  // Проверка типа сущности из команды
+            case USER -> handleUser(envelope.operation(), envelope.payload());  // Передаёт на обработку пользователя
+            case LESSON -> handleLesson(envelope.operation(), envelope.payload());  // Передаёт на обработку урока
+            case PROGRESS -> handleProgress(envelope.operation(), envelope.payload());  // Передаёт на обработку прогресса
         }
     }
 
+    // Обработчик команд для сущности User
     private void handleUser(final KafkaEventOperation operation, final JsonNode payload) {
-        switch (operation) {
-            case POST -> createUser(payload);
-            case DEL -> deleteUser(payload);
+        switch (operation) {  // Проверка операции: создание или удаление
+            case POST -> createUser(payload);  // Создать пользователя
+            case DEL -> deleteUser(payload);  // Удалить пользователя
         }
     }
 
+    // Создание пользователя из JSON
     private void createUser(final JsonNode payload) {
-        final CreateUserRequest request = objectMapper.convertValue(payload, CreateUserRequest.class);
-        final UserEntity entity = new UserEntity();
-        entity.setLogin(request.login());
+        final CreateUserRequest request = objectMapper.convertValue(payload, CreateUserRequest.class);  // JSON → DTO
+        final UserEntity entity = new UserEntity();  // Создание новой сущности БД
+        entity.setLogin(request.login());  // Заполнение полей из DTO
         entity.setEmail(request.email());
         entity.setRegistrationDate(request.registrationDate());
-        userRepository.save(entity);
-        LOG.info("Kafka: created user login={}", request.login());
+        userRepository.save(entity);  // Сохранение в БД
+        LOG.info("Kafka: created user login={}", request.login());  // Лог успеха
     }
 
+    // Удаление пользователя по ID
     private void deleteUser(final JsonNode payload) {
-        final long id = readRequiredLong(payload, "id");
-        courseProgressService.deleteAllProgressForUser(id);
-        if (!userRepository.existsById(id)) {
-            throw new IllegalArgumentException("Пользователь не найден: " + id);
+        final long id = readRequiredLong(payload, "id");  // Извлечение обязательного поля "id"
+        courseProgressService.deleteAllProgressForUser(id);  // Сначала удаляем связанный прогресс (чтобы не нарушить целостность)
+        if (!userRepository.existsById(id)) {  // Проверка существования
+            throw new IllegalArgumentException("Пользователь не найден: " + id);  // Ошибка, если не найден
         }
-        userRepository.deleteById(id);
-        LOG.info("Kafka: deleted user id={}", id);
+        userRepository.deleteById(id);  // Удаление из БД
+        LOG.info("Kafka: deleted user id={}", id);  // Лог успеха
     }
 
+    // Обработчик команд для сущности Lesson
     private void handleLesson(final KafkaEventOperation operation, final JsonNode payload) {
         switch (operation) {
-            case POST -> createLesson(payload);
-            case DEL -> deleteLesson(payload);
+            case POST -> createLesson(payload);  // Создать урок
+            case DEL -> deleteLesson(payload);  // Удалить урок
         }
     }
 
+    // Создание урока из JSON
     private void createLesson(final JsonNode payload) {
-        final CreateLessonRequest request = objectMapper.convertValue(payload, CreateLessonRequest.class);
-        final LessonEntity entity = new LessonEntity();
-        entity.setTopic(request.topic());
+        final CreateLessonRequest request = objectMapper.convertValue(payload, CreateLessonRequest.class);  // JSON → DTO
+        final LessonEntity entity = new LessonEntity();  // Новая сущность
+        entity.setTopic(request.topic());  // Заполнение полей
         entity.setVideoDurationMinutes(request.videoDurationMinutes());
         entity.setTestName(request.testName());
         entity.setMaxTestScore(request.maxTestScore());
-        lessonRepository.save(entity);
-        LOG.info("Kafka: created lesson topic={}", request.topic());
+        lessonRepository.save(entity);  // Сохранение в БД
+        LOG.info("Kafka: created lesson topic={}", request.topic());  // Лог успеха
     }
 
+    // Удаление урока по ID
     private void deleteLesson(final JsonNode payload) {
-        final long id = readRequiredLong(payload, "id");
-        courseProgressService.deleteAllProgressForLesson(id);
-        if (!lessonRepository.existsById(id)) {
-            throw new IllegalArgumentException("Урок не найден: " + id);
+        final long id = readRequiredLong(payload, "id");  // Извлечение ID
+        courseProgressService.deleteAllProgressForLesson(id);  // Удаляем прогресс по уроку (каскадная логика)
+        if (!lessonRepository.existsById(id)) {  // Проверка существования
+            throw new IllegalArgumentException("Урок не найден: " + id);  // Ошибка
         }
-        lessonRepository.deleteById(id);
-        LOG.info("Kafka: deleted lesson id={}", id);
+        lessonRepository.deleteById(id);  // Удаление из БД
+        LOG.info("Kafka: deleted lesson id={}", id);  // Лог успеха
     }
 
+    // Обработчик команд для сущности Progress
     private void handleProgress(final KafkaEventOperation operation, final JsonNode payload) {
         switch (operation) {
-            case POST -> upsertProgress(payload);
-            case DEL -> deleteProgress(payload);
+            case POST -> upsertProgress(payload);  // Создать или обновить прогресс
+            case DEL -> deleteProgress(payload);  // Удалить запись прогресса
         }
     }
 
+    // Обновление/создание прогресса прохождения урока
     private void upsertProgress(final JsonNode payload) {
-        final CompleteLessonRequest request = objectMapper.convertValue(payload, CompleteLessonRequest.class);
-        courseProgressService.markLessonCompleted(
+        final CompleteLessonRequest request = objectMapper.convertValue(payload, CompleteLessonRequest.class);  // JSON → DTO
+        courseProgressService.markLessonCompleted(  // Делегирование бизнес-логики сервису
                 request.userId(),
                 request.lessonId(),
                 request.completionDate(),
                 request.testResult()
         );
-        LOG.info("Kafka: upsert progress userId={} lessonId={}", request.userId(), request.lessonId());
+        LOG.info("Kafka: upsert progress userId={} lessonId={}", request.userId(), request.lessonId());  // Лог
     }
 
+    // Удаление записи о прогрессе
     private void deleteProgress(final JsonNode payload) {
-        final long userId = readRequiredLong(payload, "userId");
-        final long lessonId = readRequiredLong(payload, "lessonId");
-        courseProgressService.deleteProgressEntry(userId, lessonId);
-        LOG.info("Kafka: deleted progress userId={} lessonId={}", userId, lessonId);
+        final long userId = readRequiredLong(payload, "userId");  // Извлечение userId
+        final long lessonId = readRequiredLong(payload, "lessonId");  // Извлечение lessonId
+        courseProgressService.deleteProgressEntry(userId, lessonId);  // Вызов сервиса удаления
+        LOG.info("Kafka: deleted progress userId={} lessonId={}", userId, lessonId);  // Лог
     }
 
+    // Вспомогательный метод: безопасное извлечение обязательного long-поля из JSON
     private static long readRequiredLong(final JsonNode payload, final String field) {
-        if (payload == null || !payload.hasNonNull(field)) {
-            throw new IllegalArgumentException("payload." + field + " is required");
+        if (payload == null || !payload.hasNonNull(field)) {  // Проверка: поле существует и не null?
+            throw new IllegalArgumentException("payload." + field + " is required");  // Ошибка, если поле отсутствует
         }
-        return payload.get(field).asLong();
+        return payload.get(field).asLong();  // Преобразование в long и возврат
     }
 }
