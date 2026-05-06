@@ -1,0 +1,17 @@
+# LAB16: подключить к Deployment additional через envFrom (опционально).
+# Вариант 1 (retry + killer): kubectl apply -f k8s/hl06/additional/02-lab16-configmap.yaml
+# затем добавить в deploy hl06-additional:
+#   envFrom:
+#     - configMapRef:
+#         name: hl06-additional-lab16-config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hl06-additional-lab16-config
+  namespace: hl06
+data:
+  APP_LAB16_MODE: "RETRY"
+  APP_LAB16_KILLER_ENABLED: "true"
+  APP_LAB16_KILLER_INTERVAL_MS: "50000"
+  RESILIENCE4J_RETRY_INSTANCES_CRUD_MAXATTEMPTS: "25"
+  RESILIENCE4J_RETRY_INSTANCES_CRUD_WAITDURATION: "3s"
