@@ -50,6 +50,7 @@ kubectl label node hl17 hl06-workload=true --overwrite
 kubectl apply -f k8s/hl06/common/00-namespace.yaml
 kubectl apply -f k8s/hl06/common/01-app-configmap.yaml
 kubectl apply -f k8s/hl06/common/02-additional-configmap.yaml
+kubectl apply -f k8s/hl06/common/04-resourcequota.yaml
 kubectl apply -f k8s/hl06/app/01-lab-kafka-config.yaml
 kubectl apply -f k8s/hl06/app/10-deployment.yaml
 kubectl apply -f k8s/hl06/app/20-service-internal.yaml
@@ -58,6 +59,12 @@ kubectl apply -f k8s/hl06/additional/10-deployment.yaml
 kubectl apply -f k8s/hl06/additional/20-service-internal.yaml
 kubectl apply -f k8s/hl06/additional/21-service-nodeport.yaml
 kubectl get all -n hl06 -o wide
+```
+
+ResourceQuota check:
+```bash
+kubectl get resourcequota -n hl06
+kubectl describe resourcequota hl06-quota -n hl06
 ```
 
 ## 4) Validation
