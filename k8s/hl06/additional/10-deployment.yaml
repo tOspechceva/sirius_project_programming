@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hl06-additional
+  namespace: hl06
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hl06-additional
+  template:
+    metadata:
+      labels:
+        app: hl06-additional
+    spec:
+      imagePullSecrets:
+        - name: dockerhub-registry-secret
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - hl06
+                      - hl17
+      containers:
+        - name: additional-service
+          image: 10.60.3.11:8888/tospe/additional-service:lab14
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8082
+          envFrom:
+            - configMapRef:
+                name: hl06-additional-k8s-config
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"

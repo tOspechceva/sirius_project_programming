@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hl06-app
+  namespace: hl06
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hl06-app
+  template:
+    metadata:
+      labels:
+        app: hl06-app
+    spec:
+      imagePullSecrets:
+        - name: dockerhub-registry-secret
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/hostname
+                    operator: In
+                    values:
+                      - hl06
+                      - hl17
+      containers:
+        - name: app
+          image: 10.60.3.11:8888/tospe/hl-module1:lab14
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - configMapRef:
+                name: hl06-app-k8s-config
+            - configMapRef:
+                name: hl06-app-lab-kafka-config
+            - secretRef:
+                name: hl06-db-secret
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"

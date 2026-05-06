@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hl06-additional-k8s-config
+  namespace: hl06
+data:
+  SPRING_PROFILES_ACTIVE: "docker"
+  CRUD_BASE_URL: "http://hl06-app-internal:8081"
+  OBSERVABILITY_TICK_MS: "1000"
+  OBSERVABILITY_LOG_ON_REFRESH: "true"
+  OBSERVABILITY_LOG_EMPTY_SNAPSHOTS: "false"
+  USER_CACHE_STATS_LOG_MS: "60000"
+  USER_CACHE_STATS_LOG_ENABLED: "true"

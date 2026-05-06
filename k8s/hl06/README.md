@@ -36,14 +36,23 @@ kubectl create secret generic hl06-db-secret \
   --from-literal=DB_PASSWORD='hl_postgres'
 ```
 
+Templates for Git (do not apply as-is with placeholder values):
+- `k8s/hl06/common/02-db-secret-template.yaml`
+- `k8s/hl06/common/03-registry-secret-template.yaml`
+
 ## 3) Apply manifests
 
 ```bash
-kubectl apply -f k8s/hl06/k8s/00-namespace.yaml
-kubectl apply -f k8s/hl06/k8s/01-configmap.yaml
-kubectl apply -f k8s/hl06/others/01-app-lab-kafka-config.yaml
-kubectl apply -f k8s/hl06/k8s/03-deployments.yaml
-kubectl apply -f k8s/hl06/k8s/04-services.yaml
+kubectl apply -f k8s/hl06/common/00-namespace.yaml
+kubectl apply -f k8s/hl06/common/01-app-configmap.yaml
+kubectl apply -f k8s/hl06/common/02-additional-configmap.yaml
+kubectl apply -f k8s/hl06/app/01-lab-kafka-config.yaml
+kubectl apply -f k8s/hl06/app/10-deployment.yaml
+kubectl apply -f k8s/hl06/app/20-service-internal.yaml
+kubectl apply -f k8s/hl06/app/21-service-nodeport.yaml
+kubectl apply -f k8s/hl06/additional/10-deployment.yaml
+kubectl apply -f k8s/hl06/additional/20-service-internal.yaml
+kubectl apply -f k8s/hl06/additional/21-service-nodeport.yaml
 kubectl get all -n hl06 -o wide
 ```
 
