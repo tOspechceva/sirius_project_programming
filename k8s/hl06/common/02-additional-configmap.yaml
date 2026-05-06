@@ -5,6 +5,11 @@ metadata:
   namespace: hl06
 data:
   SPRING_PROFILES_ACTIVE: "docker"
+  DBHOST: "10.60.3.9"
+  DBPORT: "5433"
+  DBNAME: "hl6"
+  SCHEMANAME: "public"
+  DB_USERNAME: "postgres"
   CRUD_BASE_URL: "http://hl06-app-internal:8081"
   OBSERVABILITY_TICK_MS: "1000"
   OBSERVABILITY_LOG_ON_REFRESH: "true"

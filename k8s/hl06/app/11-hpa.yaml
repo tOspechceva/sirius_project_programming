@@ -1,0 +1,38 @@
+# LAB15 Variant 2: масштабирование до 3 реплик по CPU (требуется metrics-server на кластере).
+# Применять только для варианта 2. Для варианта 1 удалите: kubectl delete hpa -n hl06 hl06-app-hpa
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hl06-app-hpa
+  namespace: hl06
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hl06-app
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 50
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 20
+      selectPolicy: Max
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60

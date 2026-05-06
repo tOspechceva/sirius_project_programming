@@ -52,6 +52,7 @@ kubectl apply -f k8s/hl06/common/01-app-configmap.yaml
 kubectl apply -f k8s/hl06/common/02-additional-configmap.yaml
 kubectl apply -f k8s/hl06/common/04-resourcequota.yaml
 kubectl apply -f k8s/hl06/app/01-lab-kafka-config.yaml
+kubectl apply -f k8s/hl06/additional/01-lab-kafka-config.yaml
 kubectl apply -f k8s/hl06/app/10-deployment.yaml
 kubectl apply -f k8s/hl06/app/20-service-internal.yaml
 kubectl apply -f k8s/hl06/app/21-service-nodeport.yaml

@@ -26,10 +26,32 @@ spec:
             - "hl15.zil"
       containers:
         - name: app
-          image: 10.60.3.11:8888/tospe/hl-module1:lab14
+          image: 10.60.3.11:8888/tospe/hl-module1:lab15
           imagePullPolicy: Always
           ports:
             - containerPort: 8081
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 6
           envFrom:
             - configMapRef:
                 name: hl06-app-k8s-config
