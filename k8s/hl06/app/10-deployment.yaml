@@ -17,6 +17,13 @@ spec:
         - name: dockerhub-registry-secret
       nodeSelector:
         hl06-workload: "true"
+      hostAliases:
+        - ip: "10.60.3.12"
+          hostnames:
+            - "hl14.zil"
+        - ip: "10.60.3.13"
+          hostnames:
+            - "hl15.zil"
       containers:
         - name: app
           image: 10.60.3.11:8888/tospe/hl-module1:lab14
