@@ -39,10 +39,11 @@ kubectl create secret generic hl06-db-secret \
 ## 3) Apply manifests
 
 ```bash
-kubectl apply -f k8s/hl06/00-namespace.yaml
-kubectl apply -f k8s/hl06/01-configmap.yaml
-kubectl apply -f k8s/hl06/03-app-deployment-and-services.yaml
-kubectl apply -f k8s/hl06/04-additional-deployment-and-services.yaml
+kubectl apply -f k8s/hl06/k8s/00-namespace.yaml
+kubectl apply -f k8s/hl06/k8s/01-configmap.yaml
+kubectl apply -f k8s/hl06/others/01-app-lab-kafka-config.yaml
+kubectl apply -f k8s/hl06/k8s/03-deployments.yaml
+kubectl apply -f k8s/hl06/k8s/04-services.yaml
 kubectl get all -n hl06 -o wide
 ```
 
@@ -63,5 +64,25 @@ Swagger URLs:
 - additional: `http://localhost:18082/swagger-ui/index.html`
 
 NodePort URLs (replace `<NODE_IP>` with any cluster node IP reachable from your client):
-- app: `http://<NODE_IP>:30082/swagger-ui/index.html`
-- additional: `http://<NODE_IP>:30083/swagger-ui/index.html`
+- app: `http://<NODE_IP>:31082/swagger-ui/index.html`
+- additional: `http://<NODE_IP>:31083/swagger-ui/index.html`
+
+## 5) k9s for demo
+
+```bash
+# install latest k9s
+curl -sSL https://github.com/derailed/k9s/releases/latest/download/k9s_Linux_amd64.tar.gz -o /tmp/k9s.tar.gz
+tar -xzf /tmp/k9s.tar.gz -C /tmp
+sudo install -m 0755 /tmp/k9s /usr/local/bin/k9s
+
+# run in your namespace
+k9s -n hl06
+```
+
+Useful keys in k9s:
+- `:po` pods
+- `:svc` services
+- `:deploy` deployments
+- `l` logs
+- `d` describe
+- `s` shell in pod
