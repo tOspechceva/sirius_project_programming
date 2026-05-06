@@ -126,3 +126,10 @@ LAB15_DIR_V1=~/lab15_matrix_v1 LAB15_DIR_V2=~/lab15_matrix_v2 \
 ## 6. Образы
 
 В манифестах указан тег `lab15`. Соберите и запушьте образы `hl-module1:lab15` и `additional-service:lab15` в свой registry перед `kubectl apply`.
+
+## 7. Probes: если под `Running`, но `0/1`, рестарты, `503` в событиях
+
+- **Liveness** проверяет только `livenessState` (лёгкий эндпоинт), **readiness** — БД + Kafka. Так kubelet не перезапускает контейнер из‑за долгого ответа health.
+- **Startup** использует `/actuator/health/liveness`, таймауты probe увеличены в манифестах.
+
+Если **readiness** всё ещё **503** на одной ноде (например под на `hl06`, а на `hl17` было бы ОК) — проверь доступ **с этой ноды** до `DBHOST` и Kafka bootstrap (маршрутизация/firewall). Вариант: оставить поды на ноде, откуда есть доступ, или исправить сеть.

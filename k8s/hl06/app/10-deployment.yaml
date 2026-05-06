@@ -32,26 +32,27 @@ spec:
             - containerPort: 8081
           startupProbe:
             httpGet:
-              path: /actuator/health/readiness
+              path: /actuator/health/liveness
               port: 8081
             periodSeconds: 5
-            failureThreshold: 30
+            timeoutSeconds: 10
+            failureThreshold: 40
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
               port: 8081
-            initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 5
+            initialDelaySeconds: 0
+            periodSeconds: 15
+            timeoutSeconds: 10
             failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
               port: 8081
-            initialDelaySeconds: 5
-            periodSeconds: 5
-            timeoutSeconds: 5
-            failureThreshold: 6
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 12
           envFrom:
             - configMapRef:
                 name: hl06-app-k8s-config
