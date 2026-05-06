@@ -43,6 +43,10 @@ Templates for Git (do not apply as-is with placeholder values):
 ## 3) Apply manifests
 
 ```bash
+# label allowed worker nodes for this workload
+kubectl label node hl06 hl06-workload=true --overwrite
+kubectl label node hl17 hl06-workload=true --overwrite
+
 kubectl apply -f k8s/hl06/common/00-namespace.yaml
 kubectl apply -f k8s/hl06/common/01-app-configmap.yaml
 kubectl apply -f k8s/hl06/common/02-additional-configmap.yaml

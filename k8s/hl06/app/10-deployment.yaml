@@ -15,16 +15,8 @@ spec:
     spec:
       imagePullSecrets:
         - name: dockerhub-registry-secret
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: kubernetes.io/hostname
-                    operator: In
-                    values:
-                      - hl06
-                      - hl17
+      nodeSelector:
+        hl06-workload: "true"
       containers:
         - name: app
           image: 10.60.3.11:8888/tospe/hl-module1:lab14
