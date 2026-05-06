@@ -8,6 +8,7 @@
 - `scripts/hl11-run-lab13-proxy.sh` — запуск proxy рядом с k6 (на hl11).
 - `scripts/hl11-run-lab13-k6-direct.sh` — прямой запуск k6 для LAB13.
 - `scripts/hl11-run-lab13-cpu-concurrency-matrix.sh` — матрица CPU `0.5/1.0` × `concurrency 1/2`.
+- `scripts/hl11-run-lab13-cpu-ratio-matrix.sh` — матрица CPU `0.5/1.0` × `POST_POOL_RATIO 0.05/0.5/0.95` с `clear+seed` перед каждым прогоном.
 
 ## Batch listener в основном приложении
 
@@ -63,6 +64,19 @@ cd ~/sirius_project_programming
 export PROXY_BASE_URL="http://127.0.0.1:18081"
 export ADDITIONAL_BASE_URL="http://10.60.3.36:8083"
 bash scripts/hl11-run-lab13-cpu-concurrency-matrix.sh
+```
+
+### 5) Шесть прогонов CPU × ratio с очисткой/seed перед каждым тестом
+
+```bash
+cd ~/sirius_project_programming
+export PROXY_BASE_URL="http://127.0.0.1:18081"
+export ADDITIONAL_BASE_URL="http://10.60.3.36:8083"
+export TARGET_VUS=30
+export SPRING_KAFKA_LISTENER_CONCURRENCY=2
+export SEED_BETWEEN_RUNS=1
+export K6_NO_THRESHOLDS=1
+bash scripts/hl11-run-lab13-cpu-ratio-matrix.sh
 ```
 
 ## Что снимать в отчёт
