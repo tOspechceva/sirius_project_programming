@@ -97,3 +97,16 @@ bash scripts/hl11-run-lab16-variant2-cb-matrix.sh
 ## Образы
 
 После изменений пересобери и запушь **`hl-module1:lab16`** и **`additional-service:lab16`**, обнови теги в манифестах при необходимости.
+
+## Графики (вариант 1)
+
+После прогона в `~/lab16_matrix_v1` должны лежать `summary-lab16-v1-pass*-r*.json`. Три PNG (по одному на профиль 95/5, 50/50, 5/95):
+
+```bash
+cd ~/sirius_project_programming
+python3 scripts/plot-lab16-v1-three-graphs.py
+# или
+OUT_DIR=~/lab16_matrix_v1 python3 scripts/plot-lab16-v1-three-graphs.py
+```
+
+Файлы: `lab16-v1-graph-r0p95-...`, `r0p50-...`, `r0p05-...` в том же каталоге. Нужен `matplotlib` (venv: `pip install matplotlib`).
