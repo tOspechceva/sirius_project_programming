@@ -5,8 +5,10 @@ LAB16 вариант 1 (retry + killer): три графика по POST/GET п�
 
   OUT_DIR=~/lab16_matrix_v1 python3 scripts/plot-lab16-v1-three-graphs.py
 
-Имя файлов: summary-lab16-v1-pass1-r0p95-vus30-....json
-Переопределить префикс: LAB16_VARIANT=lab16-v1
+Поддерживаются имена вида:
+  summary-lab16-v1-pass1-r0p95-vus30-....json
+  summary-v2-pass2-r0p05-vus30-....json
+(любой префикс до фрагмента -passN-r...)
 """
 from __future__ import annotations
 
@@ -18,15 +20,9 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 OUT_DIR = Path(os.environ.get("OUT_DIR", Path.home() / "lab16_matrix_v1"))
-VARIANT = os.environ.get("LAB16_VARIANT", "lab16-v1")
 
-
-def build_rx(variant: str) -> re.Pattern[str]:
-    escaped = re.escape(variant)
-    return re.compile(rf"summary-{escaped}-pass(?P<pass>\d+)-r(?P<ratio>\d+p\d+)-")
-
-
-RX = build_rx(VARIANT)
+# Универсально: ...-pass1-r0p95-...
+RX_PASS_RATIO = re.compile(r"-pass(?P<pass>\d+)-r(?P<ratio>\d+p\d+)-")
 
 
 def metric_avg(metrics: dict, key: str) -> float | None:
@@ -43,9 +39,8 @@ def metric_avg(metrics: dict, key: str) -> float | None:
 
 def load_by_ratio() -> dict[str, dict[int, tuple[float, float]]]:
     out: dict[str, dict[int, tuple[float, float]]] = {}
-    pattern = f"summary-{VARIANT}-pass*-r*.json"
-    for f in sorted(OUT_DIR.glob(pattern)):
-        m = RX.search(f.name)
+    for f in sorted(OUT_DIR.glob("summary-*.json")):
+        m = RX_PASS_RATIO.search(f.name)
         if not m:
             continue
         pass_num = int(m.group("pass"))
@@ -65,7 +60,7 @@ def main() -> None:
     data = load_by_ratio()
     if not data:
         raise SystemExit(
-            f"Нет summary-{VARIANT}-pass*-r*.json в {OUT_DIR} (см. OUT_DIR, LAB16_VARIANT)."
+            f"Нет подходящих summary-*-pass*-r*.json в {OUT_DIR} (проверь OUT_DIR и имена файлов)."
         )
 
     order = ["0.95", "0.50", "0.05"]

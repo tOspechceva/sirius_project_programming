@@ -100,7 +100,7 @@ bash scripts/hl11-run-lab16-variant2-cb-matrix.sh
 
 ## Графики (вариант 1)
 
-После прогона в `~/lab16_matrix_v1` должны лежать `summary-lab16-v1-pass*-r*.json`. Три PNG (по одному на профиль 95/5, 50/50, 5/95):
+После прогона в `~/lab16_matrix_v1` должны лежать JSON summary вида `summary-*-pass*-r*.json` (например `summary-lab16-v1-pass1-r0p95-...` или `summary-v2-pass2-r0p05-...`). Три PNG (по одному на профиль 95/5, 50/50, 5/95):
 
 ```bash
 cd ~/sirius_project_programming
@@ -109,4 +109,11 @@ python3 scripts/plot-lab16-v1-three-graphs.py
 OUT_DIR=~/lab16_matrix_v1 python3 scripts/plot-lab16-v1-three-graphs.py
 ```
 
-Файлы: `lab16-v1-graph-r0p95-...`, `r0p50-...`, `r0p05-...` в том же каталоге. Нужен `matplotlib` (venv: `pip install matplotlib`).
+Файлы: `lab16-v1-graph-r0p95-...`, `r0p50-...`, `r0p05-...` в том же каталоге.
+
+На Debian/Ubuntu с PEP 668 не используй `pip install --user`; один раз заведи venv и поставь matplotlib:
+
+```bash
+python3 -m venv .venv-plot && . .venv-plot/bin/activate && pip install matplotlib
+.venv-plot/bin/python scripts/plot-lab16-v1-three-graphs.py
+```
